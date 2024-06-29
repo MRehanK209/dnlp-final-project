@@ -14,7 +14,7 @@ from optimizer import AdamW
 TQDM_DISABLE = False
 
 
-def transform_data(dataset, tokenizer, max_length=256, batch_size=16, data_type='train'):
+def transform_data(dataset, tokenizer, max_length=256, batch_size=64, data_type='train'):
     """
     Turn the data to the format you want to use.
     Use AutoTokenizer to obtain encoding (input_ids and attention_mask).
@@ -46,7 +46,7 @@ def transform_data(dataset, tokenizer, max_length=256, batch_size=16, data_type=
     return dataloader
 
 
-def train_model(model, train_data, dev_data, device, tokenizer, num_epochs=1, lr=5e-5):
+def train_model(model, train_data, dev_data, device, tokenizer, num_epochs=3, lr=5e-5):
     """
     Train the model. Return and save the model.
     """

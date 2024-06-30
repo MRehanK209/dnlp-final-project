@@ -41,7 +41,7 @@ def get_args():
     parser.add_argument("--seed", type=int, default=11711)
     parser.add_argument("--use_gpu", action="store_true")
     parser.add_argument("--epochs", type=int, default=5)
-    parser.add_argument("--lr", type=int, default=1e-3)
+    parser.add_argument("--lr", type=int, default=1e-5)
     args = parser.parse_args()
     return args
 
@@ -92,7 +92,7 @@ def transform_data(dataset, max_length=512):
     else :
         dataset = TensorDataset(input_ids, attention_mask)
     
-    dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
     return dataloader
 
 
@@ -217,7 +217,6 @@ def evaluate_model(model, test_data, device):
     predicted_labels_np = all_predictions.cpu().numpy()
 
     accuracy1 = accuracy_binary(predicted_labels_np,true_labels_np)
-    model.train()
     return accuracy1
 
 
@@ -243,7 +242,7 @@ def finetune_paraphrase_detection(args):
     # (or in the csv files directly)
 
     train_dataset = train_dataset.sample(frac=1, random_state=42).reset_index(drop=True)
-    train_ratio = 0.8
+    train_ratio = 0.7
     train_size = int(train_ratio * len(train_dataset))
     train_df = train_dataset[:train_size]
     dev_df = train_dataset[train_size:]

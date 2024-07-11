@@ -109,17 +109,15 @@ class MultitaskBERT(nn.Module):
         ### TODO
         raise NotImplementedError
 
-    def predict_paraphrase_types(
-        self, input_ids_1, attention_mask_1, input_ids_2, attention_mask_2
-    ):
+    def predict_paraphrase(self, input_ids_1, attention_mask_1, input_ids_2, attention_mask_2):
         """
-        Given a batch of pairs of sentences, outputs logits for detecting the paraphrase types.
-        There are 7 different types of paraphrases.
-        Thus, your output should contain 7 unnormalized logits for each sentence. It will be passed to the sigmoid function
-        during evaluation, and handled as a logit by the appropriate loss function.
-        Dataset: ETPC
+        Given a batch of pairs of sentences, outputs a single logit for predicting whether they are paraphrases.
         """
-        ### TODO
+        embeddings_1 = self.forward(input_ids_1, attention_mask_1)
+        embeddings_2 = self.forward(input_ids_2, attention_mask_2)
+        concatenated = torch.cat((embeddings_1, embeddings_2), dim=1)
+        logits = self.paraphrase_classifier(concatenated)
+        return logits.squeeze()
         raise NotImplementedError
 
 

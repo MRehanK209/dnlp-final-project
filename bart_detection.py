@@ -19,7 +19,7 @@ class BartWithClassifier(nn.Module):
     def __init__(self, num_labels=7):
         super(BartWithClassifier, self).__init__()
 
-        self.bart = BartModel.from_pretrained("facebook/bart-large")
+        self.bart = BartModel.from_pretrained("facebook/bart-large", local_files_only=True)
         self.classifier = nn.Linear(self.bart.config.hidden_size, num_labels)
         self.sigmoid = nn.Sigmoid()
 
@@ -37,7 +37,7 @@ class BartWithClassifier(nn.Module):
         return probabilities
 
 
-def transform_data(dataset, max_length=512):
+def transform_data(dataset, max_length=512, batch_size=16):
     """
     dataset: pd.DataFrame
 
@@ -55,10 +55,35 @@ def transform_data(dataset, max_length=512):
     Return a DataLoader with the TensorDataset. You can choose a batch size of your
     choice.
     """
+   
+    tokenizer = AutoTokenizer.from_pretrained("facebook/bart-large", local_files_only=True)
+    
+    # Extract sentences and labels
+    sentences = dataset['sentence'].tolist()
+    labels = dataset.get('paraphrase_types', None)
+    
+    # Tokenize the sentences
+    encodings = tokenizer(sentences, truncation=True, padding=True, max_length=max_length, return_tensors='pt')
+    
+    # Convert labels to binary form if they exist
+    if labels is not None:
+        binary_labels = np.zeros((len(labels), 7))
+        for idx, label_list in enumerate(labels):
+            if isinstance(label_list, str):
+                for label in map(int, label_list.split()):
+                    binary_labels[idx, label] = 1
+        labels_tensor = torch.tensor(binary_labels, dtype=torch.float)
+        dataset = TensorDataset(encodings['input_ids'], encodings['attention_mask'], labels_tensor)
+    else:
+        dataset = TensorDataset(encodings['input_ids'], encodings['attention_mask'])
+    
+    data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    return data_loader
+
     raise NotImplementedError
 
 
-def train_model(model, train_data, dev_data, device):
+def train_model(model, train_data, dev_data, device, epochs=3):
     """
     Train the model. You can use any training loop you want. We recommend starting with
     AdamW as your optimizer. You can take a look at the SST training loop for reference.
@@ -69,7 +94,41 @@ def train_model(model, train_data, dev_data, device):
 
     Return the trained model.
     """
-    ### TODO
+    
+    optimizer = AdamW(model.parameters(), lr=2e-5)
+    loss_fn = nn.BCELoss()
+    
+    for epoch in range(epochs):
+        model.train()
+        train_loss = 0
+        correct_predictions = 0
+        total_predictions = 0
+        
+        for batch in tqdm(train_data, disable=TQDM_DISABLE):
+            input_ids, attention_mask, labels = batch
+            input_ids, attention_mask, labels = input_ids.to(device), attention_mask.to(device), labels.to(device)
+            
+            optimizer.zero_grad()
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+            loss = loss_fn(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            
+            train_loss += loss.item()
+            predictions = (outputs > 0.5).int()
+            correct_predictions += (predictions == labels).sum().item()
+            total_predictions += labels.numel()
+        
+        train_accuracy = correct_predictions / total_predictions
+        dev_accuracy = evaluate_model(model, dev_data, device)
+        
+        print(f"Epoch {epoch + 1}/{epochs}")
+        print(f"Training Loss: {train_loss / len(train_data):.4f}")
+        print(f"Training Accuracy: {train_accuracy:.4f}")
+        print(f"Validation Accuracy: {dev_accuracy:.4f}")
+    
+    return model
+
     raise NotImplementedError
 
 
@@ -81,7 +140,21 @@ def test_model(model, test_data, test_ids, device):
     The 'Predicted_Paraphrase_Types' column should contain the binary array of your model predictions.
     Return this dataframe.
     """
-    ### TODO
+    model.eval()
+    predictions = []
+    
+    with torch.no_grad():
+        for batch in tqdm(test_data, disable=TQDM_DISABLE):
+            input_ids, attention_mask = batch
+            input_ids, attention_mask = input_ids.to(device), attention_mask.to(device)
+            
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+            predicted_labels = (outputs > 0.5).int().cpu().numpy()
+            predictions.extend(predicted_labels)
+    
+    results = pd.DataFrame({'id': test_ids, 'Predicted_Paraphrase_Types': [list(pred) for pred in predictions]})
+    return results
+
 
     raise NotImplementedError
 
@@ -157,9 +230,15 @@ def finetune_paraphrase_detection(args):
     train_dataset = pd.read_csv("data/etpc-paraphrase-train.csv", sep="\t")
     test_dataset = pd.read_csv("data/etpc-paraphrase-detection-test-student.csv", sep="\t")
 
+    train_size = int(0.8 * len(train_dataset))
+    train_data1 = train_dataset[:train_size]
+    dev_data1 = train_dataset[train_size:]
+
+    train_data = transform_data(train_data1)
+    dev_data = transform_data(dev_data1)
     # TODO You might do a split of the train data into train/validation set here
     # (or in the csv files directly)
-    train_data = transform_data(train_dataset)
+    #train_data = transform_data(train_dataset)
     test_data = transform_data(test_dataset)
 
     print(f"Loaded {len(train_dataset)} training samples.")

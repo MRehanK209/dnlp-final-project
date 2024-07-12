@@ -65,7 +65,8 @@ class MultitaskBERT(nn.Module):
             elif config.option == "finetune":
                 param.requires_grad = True
         ### TODO
-        raise NotImplementedError
+        self.sentiment_classifier = nn.Linear(self.bert.config.hidden_size, N_SENTIMENT_CLASSES)
+        # raise NotImplementedError
 
     def forward(self, input_ids, attention_mask):
         """Takes a batch of sentences and produces embeddings for them."""
@@ -75,7 +76,11 @@ class MultitaskBERT(nn.Module):
         # Here, you can start by just returning the embeddings straight from BERT.
         # When thinking of improvements, you can later try modifying this
         # (e.g., by adding other layers).
+        outputs = self.bert(input_ids, attention_mask=attention_mask)
+        pooled_output = outputs['pooler_output']
+        return pooled_output
         ### TODO
+
         raise NotImplementedError
 
     def predict_sentiment(self, input_ids, attention_mask):
@@ -86,7 +91,9 @@ class MultitaskBERT(nn.Module):
         Thus, your output should contain 5 logits for each sentence.
         Dataset: SST
         """
-        ### TODO
+        pooled_output = self.forward(input_ids, attention_mask)
+        sentiment_logits = self.sentiment_classifier(pooled_output)
+        return sentiment_logits
         raise NotImplementedError
 
     def predict_paraphrase(self, input_ids_1, attention_mask_1, input_ids_2, attention_mask_2):
@@ -97,6 +104,11 @@ class MultitaskBERT(nn.Module):
         Dataset: Quora
         """
         ### TODO
+        embeddings_1 = self.forward(input_ids_1, attention_mask_1)
+        embeddings_2 = self.forward(input_ids_2, attention_mask_2)
+        concatenated = torch.cat((embeddings_1, embeddings_2), dim=1)
+        logits = self.paraphrase_classifier(concatenated)
+        return logits.squeeze()
         raise NotImplementedError
 
     def predict_similarity(self, input_ids_1, attention_mask_1, input_ids_2, attention_mask_2):
@@ -109,15 +121,17 @@ class MultitaskBERT(nn.Module):
         ### TODO
         raise NotImplementedError
 
-    def predict_paraphrase(self, input_ids_1, attention_mask_1, input_ids_2, attention_mask_2):
+    def predict_paraphrase_types(
+            self, input_ids_1, attention_mask_1, input_ids_2, attention_mask_2
+    ):
         """
-        Given a batch of pairs of sentences, outputs a single logit for predicting whether they are paraphrases.
+        Given a batch of pairs of sentences, outputs logits for detecting the paraphrase types.
+        There are 7 different types of paraphrases.
+        Thus, your output should contain 7 unnormalized logits for each sentence. It will be passed to the sigmoid function
+        during evaluation, and handled as a logit by the appropriate loss function.
+        Dataset: ETPC
         """
-        embeddings_1 = self.forward(input_ids_1, attention_mask_1)
-        embeddings_2 = self.forward(input_ids_2, attention_mask_2)
-        concatenated = torch.cat((embeddings_1, embeddings_2), dim=1)
-        logits = self.paraphrase_classifier(concatenated)
-        return logits.squeeze()
+        ### TODO
         raise NotImplementedError
 
 
@@ -175,6 +189,57 @@ def train_multitask(args):
             collate_fn=sst_dev_data.collate_fn,
         )
 
+    if args.task == "paraphrase" or args.task == "multitask":
+        paraphrase_train_data = SentencePairDataset(paraphrase_train_data, args)
+        paraphrase_dev_data = SentencePairDataset(paraphrase_dev_data, args)
+
+        paraphrase_train_dataloader = DataLoader(
+            paraphrase_train_data,
+            shuffle=True,
+            batch_size=args.batch_size,
+            collate_fn=paraphrase_train_data.collate_fn,
+        )
+        paraphrase_dev_dataloader = DataLoader(
+            paraphrase_dev_data,
+            shuffle=False,
+            batch_size=args.batch_size,
+            collate_fn=paraphrase_dev_data.collate_fn,
+        )
+
+    if args.task == "sts" or args.task == "multitask":
+        sts_train_data = SentencePairDataset(sts_train_data, args)
+        sts_dev_data = SentencePairDataset(sts_dev_data, args)
+
+        sts_train_dataloader = DataLoader(
+            sts_train_data,
+            shuffle=True,
+            batch_size=args.batch_size,
+            collate_fn=sts_train_data.collate_fn,
+        )
+        sts_dev_dataloader = DataLoader(
+            sts_dev_data,
+            shuffle=False,
+            batch_size=args.batch_size,
+            collate_fn=sts_dev_data.collate_fn,
+        )
+
+    if args.task == "paraphrase_type" or args.task == "multitask":
+        paraphrase_type_train_data = SentenceClassificationDataset(paraphrase_type_train_data, args)
+        paraphrase_type_dev_data = SentenceClassificationDataset(paraphrase_type_dev_data, args)
+
+        paraphrase_type_train_dataloader = DataLoader(
+            paraphrase_type_train_data,
+            shuffle=True,
+            batch_size=args.batch_size,
+            collate_fn=paraphrase_type_train_data.collate_fn,
+        )
+        paraphrase_type_dev_dataloader = DataLoader(
+            paraphrase_type_dev_data,
+            shuffle=False,
+            batch_size=args.batch_size,
+            collate_fn=paraphrase_type_dev_data.collate_fn,
+        )
+
     ### TODO
     #   Load data for the other datasets
     # If you are doing the paraphrase type detection with the minBERT model as well, make sure
@@ -215,7 +280,7 @@ def train_multitask(args):
             # Train the model on the sst dataset.
 
             for batch in tqdm(
-                sst_train_dataloader, desc=f"train-{epoch+1:02}", disable=TQDM_DISABLE
+                    sst_train_dataloader, desc=f"train-{epoch + 1:02}", disable=TQDM_DISABLE
             ):
                 b_ids, b_mask, b_labels = (
                     batch["token_ids"],
@@ -282,11 +347,12 @@ def train_multitask(args):
             "sts": (sts_train_corr, sts_dev_corr),
             "qqp": (quora_train_acc, quora_dev_acc),
             "etpc": (etpc_train_acc, etpc_dev_acc),
-            "multitask": (0, 0),  # TODO
+            "multitask": ((sst_train_acc + quora_train_acc + sts_train_corr + etpc_train_acc) / 4,
+                          (sst_dev_acc + quora_dev_acc + sts_dev_corr + etpc_dev_acc) / 4)  # TODO
         }[args.task]
 
         print(
-            f"Epoch {epoch+1:02} ({args.task}): train loss :: {train_loss:.3f}, train :: {train_acc:.3f}, dev :: {dev_acc:.3f}"
+            f"Epoch {epoch + 1:02} ({args.task}): train loss :: {train_loss:.3f}, train :: {train_acc:.3f}, dev :: {dev_acc:.3f}"
         )
 
         if dev_acc > best_dev_acc:

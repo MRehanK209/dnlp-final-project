@@ -564,7 +564,7 @@ def get_args():
     return args
 
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     args = get_args()
     args.filepath = f"models/{args.option}-{args.epochs}-{args.lr}-{args.task}.pt"  # save path
     seed_everything(args.seed)  # fix the seed for reproducibility

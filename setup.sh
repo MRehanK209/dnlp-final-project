@@ -1,8 +1,8 @@
 #!/bin/bash -i
-set -e
+#set -e
 
 # Set up Conda, install Python
-conda create -n dnlp python=3.10
+#conda create -n dnlp python=3.10
 conda activate dnlp
 
 # Check for CUDA and install appropriate PyTorch version

@@ -51,8 +51,8 @@ class MultitaskBERT(nn.Module):
     (- Paraphrase type detection (predict_paraphrase_types))
     """
 
-    def __init__(self, config):
-        super(MultitaskBERT, self).__init__()
+    def _init_(self, config):
+        super(MultitaskBERT, self)._init_()
 
         self.bert = BertModel.from_pretrained(
             "bert-base-uncased", local_files_only=config.local_files_only
@@ -218,8 +218,8 @@ def train_multitask(args):
         )
 
     if args.task == "qqp" or args.task == "multitask":
-        #quora_train_data = quora_train_data[:1000]
-        #quora_dev_data = quora_dev_data[:1000]
+        quora_train_data = quora_train_data[:20]
+        quora_dev_data = quora_dev_data[:20]
         paraphrase_train_data = SentencePairDataset(quora_train_data, args)
         paraphrase_dev_data = SentencePairDataset(quora_dev_data, args)
 
@@ -364,10 +364,10 @@ def train_multitask(args):
                 num_batches += 1
             #raise NotImplementedError
 
-        if args.task == "etpc" or args.task == "multitask":
+        #if args.task == "etpc" or args.task == "multitask":
             # Trains the model on the etpc dataset
             ### TODO
-            raise NotImplementedError
+            #raise NotImplementedError
 
         train_loss = train_loss / num_batches
 
@@ -566,7 +566,7 @@ def get_args():
     return args
 
 
-if __name__ == "__main__":
+if _name_ == "_main_":
     args = get_args()
     args.filepath = f"models/{args.option}-{args.epochs}-{args.lr}-{args.task}.pt"  # save path
     seed_everything(args.seed)  # fix the seed for reproducibility

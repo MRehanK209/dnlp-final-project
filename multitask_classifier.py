@@ -260,7 +260,7 @@ def train_multitask(args):
     print(separator)
 
     model = MultitaskBERT(config)
-    model = model.to(device)
+    model = model.to(device)    
 
     lr = args.lr
     optimizer = AdamW(model.parameters(), lr=lr)

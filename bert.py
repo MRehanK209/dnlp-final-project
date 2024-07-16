@@ -55,7 +55,7 @@ class BertSelfAttention(nn.Module):
         new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
         context_layer = context_layer.view(*new_context_layer_shape)
         return context_layer
-
+    
         raise NotImplementedError
         # Normalize the scores.
         # Multiply the attention scores to the value and get back V'.
@@ -108,9 +108,9 @@ class BertLayer(nn.Module):
         """
         ### TODO
 
-        output = dense_layer(output)
+        output = dense_layer(output)  
         output = dropout(output)
-        output = ln_layer(output + input)
+        output = ln_layer(output + input)       
         return output
         raise NotImplementedError
         # Hint: Remember that BERT applies dropout to the output of each sub-layer,
@@ -131,13 +131,11 @@ class BertLayer(nn.Module):
         4. a add-norm that takes the input and output of the feed forward layer
         """
         attention_output = self.self_attention(hidden_states, attention_mask)
-        attention_output = self.add_norm(hidden_states, attention_output, self.attention_dense, self.attention_dropout,
-                                         self.attention_layer_norm)
-
+        attention_output = self.add_norm(hidden_states, attention_output, self.attention_dense, self.attention_dropout, self.attention_layer_norm)
+        
         intermediate_output = self.interm_af(self.interm_dense(attention_output))
-        output = self.add_norm(attention_output, intermediate_output, self.out_dense, self.out_dropout,
-                               self.out_layer_norm)
-
+        output = self.add_norm(attention_output, intermediate_output, self.out_dense, self.out_dropout, self.out_layer_norm)
+        
         return output
 
         ### TODO
@@ -187,7 +185,7 @@ class BertModel(BertPreTrainedModel):
         # Get word embedding from self.word_embedding into input_embeds.
         inputs_embeds = self.word_embedding(input_ids)
         ### TODO
-        # raise NotImplementedError
+        #raise NotImplementedError
 
         # Get position index and position embedding from self.pos_embedding into pos_embeds.
         pos_ids = self.position_ids[:, :seq_length]
@@ -195,7 +193,7 @@ class BertModel(BertPreTrainedModel):
 
         pos_embeds = self.pos_embedding(pos_ids)
         ### TODO
-        # raise NotImplementedError
+        #raise NotImplementedError
         # Get token type ids, since we are not considering token type,
         # this is just a placeholder.
         tk_type_ids = torch.zeros(input_shape, dtype=torch.long, device=input_ids.device)

@@ -54,19 +54,13 @@ def model_eval_multitask(
                     batch["sent_ids"],
                 )
 
-                #print(f"Step: {step}")
-                #print(f"Batch token_ids_1 shape: {b_ids1.shape}")
-                #print(f"Batch token_ids_2 shape: {b_ids2.shape}")
-                #print(f"Batch labels shape: {b_labels.shape}")
                 b_ids1 = b_ids1.to(device)
                 b_mask1 = b_mask1.to(device)
                 b_ids2 = b_ids2.to(device)
                 b_mask2 = b_mask2.to(device)
 
                 logits = model.predict_paraphrase(b_ids1, b_mask1, b_ids2, b_mask2)
-                #print(f"Logits: {logits}") 
                 y_hat = logits.sigmoid().round().flatten().cpu().numpy()
-                #print(f"Predicted labels: {y_hat}") 
                 b_labels = b_labels.flatten().cpu().numpy()
 
                 quora_y_pred.extend(y_hat)
@@ -75,7 +69,6 @@ def model_eval_multitask(
 
         if task == "qqp" or task == "multitask":
             quora_accuracy = np.mean(np.array(quora_y_pred) == np.array(quora_y_true))
-            #print(f"Quora Accuracy: {quora_accuracy}")
         else:
             quora_accuracy = None
 
@@ -334,8 +327,8 @@ def test_model_multitask(args, model, device):
         args.sst_dev, args.quora_dev, args.sts_dev, args.etpc_dev, split="dev"
     )
 
-    sst_test_data = SentenceClassificationTestDataset(sst_test_data[:32], args)
-    sst_dev_data = SentenceClassificationDataset(sst_dev_data[:32], args)
+    sst_test_data = SentenceClassificationTestDataset(sst_test_data, args)
+    sst_dev_data = SentenceClassificationDataset(sst_dev_data, args)
 
     sst_test_dataloader = DataLoader(
         sst_test_data, shuffle=True, batch_size=args.batch_size, collate_fn=sst_test_data.collate_fn
@@ -343,12 +336,9 @@ def test_model_multitask(args, model, device):
     sst_dev_dataloader = DataLoader(
         sst_dev_data, shuffle=False, batch_size=args.batch_size, collate_fn=sst_dev_data.collate_fn
     )
-    #print("Loaded SST data")
-    quora_test_data = quora_test_data[:32]
-    quora_dev_data = quora_dev_data[:32]
     quora_test_data = SentencePairTestDataset(quora_test_data, args)
     quora_dev_data = SentencePairDataset(quora_dev_data, args)
-    #print("Loading Quora data")
+
     quora_test_dataloader = DataLoader(
         quora_test_data,
         shuffle=True,
@@ -361,9 +351,9 @@ def test_model_multitask(args, model, device):
         batch_size=args.batch_size,
         collate_fn=quora_dev_data.collate_fn,
     )
-    #print("Loaded Quora data")
-    sts_test_data = SentencePairTestDataset(sts_test_data[:32], args)
-    sts_dev_data = SentencePairDataset(sts_dev_data[:32], args, isRegression=True)
+
+    sts_test_data = SentencePairTestDataset(sts_test_data, args)
+    sts_dev_data = SentencePairDataset(sts_dev_data, args, isRegression=True)
 
     sts_test_dataloader = DataLoader(
         sts_test_data, shuffle=True, batch_size=args.batch_size, collate_fn=sts_test_data.collate_fn
@@ -387,7 +377,7 @@ def test_model_multitask(args, model, device):
         batch_size=args.batch_size,
         collate_fn=etpc_dev_data.collate_fn,
     )
-    #print("Loaded ETPC data")
+
     task = args.task
 
     (
@@ -412,7 +402,7 @@ def test_model_multitask(args, model, device):
         device,
         task,
     )
-    #print("Evaluated model on dev data")
+
     (
         test_quora_y_pred,
         test_quora_sent_ids,
@@ -431,7 +421,7 @@ def test_model_multitask(args, model, device):
         device,
         task,
     )
-    #print("Evaluated model on test data")
+
     if task == "sst" or task == "multitask":
         with open(args.sst_dev_out, "w+") as f:
             print(f"dev sentiment acc :: {dev_sst_accuracy :.3f}")
@@ -479,4 +469,6 @@ def test_model_multitask(args, model, device):
             f.write("id,Predicted_Paraphrase_Types\n")
             for p, s in zip(test_etpc_sent_ids, test_etpc_y_pred):
                 f.write(f"{p}\t{s}\n")
+
+
 

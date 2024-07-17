@@ -170,10 +170,7 @@ def train_multitask(args):
 
     # SST dataset
     if args.task == "sst" or args.task == "multitask":
-
-        sst_train_data = sst_train_data[:32]
-        sst_dev_data = sst_dev_data[:32]
-
+        
         sst_train_data = SentenceClassificationDataset(sst_train_data, args)
         sst_dev_data = SentenceClassificationDataset(sst_dev_data, args)
 
@@ -189,9 +186,8 @@ def train_multitask(args):
             batch_size=args.batch_size,
             collate_fn=sst_dev_data.collate_fn,
         )
+        # STS dataset
     if args.task == "sts" or args.task == "multitask":
-        sts_train_data = sts_train_data[:500]
-        sts_dev_data = sts_dev_data[:500]
 
         sts_train_data = SentencePairDataset(sts_train_data, args)
         sts_dev_data = SentencePairDataset(sts_dev_data, args)
@@ -208,10 +204,9 @@ def train_multitask(args):
             batch_size=args.batch_size,
             collate_fn=sts_dev_data.collate_fn,
         )
-
+        # QQP dataset
     if args.task == "qqp" or args.task == "multitask":
-        quora_train_data=quora_train_data[:32]
-        quora_dev_data=quora_dev_data[:32]
+        
         quora_train_data = SentencePairDataset(quora_train_data, args)
         quora_dev_data = SentencePairDataset(quora_dev_data, args)
 
@@ -285,6 +280,7 @@ def train_multitask(args):
                 num_batches += 1
 
         if args.task == "sts" or args.task == "multitask":
+            # Train the model on the sts dataset.
             for batch in tqdm(
                 sts_train_dataloader, desc=f"train-{epoch+1:02}", disable=TQDM_DISABLE
             ):
@@ -317,6 +313,7 @@ def train_multitask(args):
 
 
         if args.task == "qqp" or args.task == "multitask":
+            # Train the model on the qqp dataset.
             for batch in tqdm(
                     quora_train_dataloader, desc=f"train-{epoch + 1:02}", disable=TQDM_DISABLE
             ):
@@ -443,7 +440,7 @@ def get_args():
     # You should split the train data into a train and dev set first and change the
     # default path of the --etpc_dev argument to your dev set.
     parser.add_argument("--etpc_train", type=str, default="data/etpc-paraphrase-train.csv")
-    parser.add_argument("--etpc_dev", type=str, default="data/etpc-paraphrase-dev.csv")
+    parser.add_argument("--etpc_dev", type=str, default="data/etpc-paraphrase-train.csv")
     parser.add_argument(
         "--etpc_test", type=str, default="data/etpc-paraphrase-detection-test-student.csv"
     )

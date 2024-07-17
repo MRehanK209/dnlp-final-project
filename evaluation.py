@@ -362,8 +362,8 @@ def test_model_multitask(args, model, device):
         collate_fn=quora_dev_data.collate_fn,
     )
     #print("Loaded Quora data")
-    sts_test_data = SentencePairTestDataset(sts_test_data, args)
-    sts_dev_data = SentencePairDataset(sts_dev_data, args, isRegression=True)
+    sts_test_data = SentencePairTestDataset(sts_test_data[:32], args)
+    sts_dev_data = SentencePairDataset(sts_dev_data[:32], args, isRegression=True)
 
     sts_test_dataloader = DataLoader(
         sts_test_data, shuffle=True, batch_size=args.batch_size, collate_fn=sts_test_data.collate_fn

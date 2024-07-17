@@ -31,4 +31,4 @@ echo "Latest Commit: $(git rev-parse --short HEAD)"
 echo -e "Uncommitted Changes: $(git status --porcelain | wc -l)\n"
 
 # Run the script:
-python -u bart_generation.py --use_gpu --local_files_only --option finetune --task sst --hidden_dropout_prob 0.1
+python -u bart_generation.py --seed 11711 --use_gpu

@@ -371,7 +371,7 @@ def train_multitask(args):
             "sts": (sts_train_corr, sts_dev_corr),
             "qqp": (quora_train_acc, quora_dev_acc),
             "etpc": (etpc_train_acc, etpc_dev_acc),
-            "multitask": (0, 0),  # TODO
+            "multitask": (((sst_train_acc if sst_train_acc is not None else 0) + (quora_train_acc if quora_train_acc is not None else 0) + ((sts_train_corr + 1) / 2 if sts_train_corr is not None else 0)) / 3, ((sst_dev_acc if sst_dev_acc is not None else 0) + (quora_dev_acc if quora_dev_acc is not None else 0) + ((sts_dev_corr + 1) / 2 if sts_dev_corr is not None else 0)) / 3),
         }[args.task]
 
         print(

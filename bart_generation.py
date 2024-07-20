@@ -41,7 +41,11 @@ def transform_data(dataset, tokenizer, max_length=256, batch_size=64, data_type=
         dataset = TensorDataset(encodings.input_ids, encodings.attention_mask, target_encodings.input_ids)
     else:
         dataset = TensorDataset(encodings.input_ids, encodings.attention_mask)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+    if data_type in ('train', 'dev'):
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    else:
+        dataloader = DataLoader(dataset, batch_size=batch_size)
 
     return dataloader
 
@@ -116,6 +120,7 @@ def evaluate_model(model, test_data, device, tokenizer):
     with torch.no_grad():
         for batch in test_data:
             input_ids, attention_mask, labels = batch
+            print(f"Current batch size: {len(input_ids)}")
             input_ids = input_ids.to(device)
             attention_mask = attention_mask.to(device)
             labels = labels.to(device)
@@ -174,11 +179,8 @@ def finetune_paraphrase_generation(args):
 
     train_dataset = pd.read_csv("data/processed_etpc_paraphrase_train.csv", on_bad_lines='warn', sep="\t")
     dev_dataset = pd.read_csv("data/processed_etpc_paraphrase_dev.csv", on_bad_lines='warn', sep="\t")
-    test_dataset = pd.read_csv("data/processed_etpc_paraphrase_generation_test_student.csv", on_bad_lines='warn',
+    test_dataset = pd.read_csv("data/etpc-paraphrase-generation-test-student.csv", on_bad_lines='warn',
                                sep="\t")
-
-    # You might do a split of the train data into train/validation set here
-    # ...
 
     train_data = transform_data(train_dataset, tokenizer, data_type='train')
     dev_data = transform_data(dev_dataset, tokenizer, data_type='dev')
@@ -189,11 +191,11 @@ def finetune_paraphrase_generation(args):
     model = train_model(model, train_data, dev_data, device, tokenizer)
 
     print("Training finished.")
-
+    print("Calculating bleu score...")
     bleu_score = evaluate_model(model, dev_data, device, tokenizer)
     print(f"The BLEU-score of the model is: {bleu_score:.3f}")
-
-    test_ids = test_dataset["id"]
+    print("Testing model...")
+    test_ids = test_dataset["id"].values
     test_results = test_model(test_data, test_ids, device, model, tokenizer)
     test_results.to_csv(
         "predictions/bart/etpc-paraphrase-generation-test-output.csv", index=False, sep="\t"

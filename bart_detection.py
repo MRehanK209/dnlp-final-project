@@ -244,8 +244,8 @@ def finetune_paraphrase_detection(args):
     train_dataset = train_dataset.sample(frac=1, random_state=42).reset_index(drop=True)
     train_ratio = 0.7
     train_size = int(train_ratio * len(train_dataset))
-    train_df = train_dataset[:train_size]
-    dev_df = train_dataset[train_size:]
+    train_df = train_dataset.iloc[:train_size]
+    dev_df = train_dataset.iloc[train_size:]
     
     train_data = transform_data(train_df)
     dev_data = transform_data(dev_df)

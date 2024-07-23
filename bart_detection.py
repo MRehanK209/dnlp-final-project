@@ -58,7 +58,7 @@ def accuracy_binary(predicted_labels_np,true_labels_np):
     return np.mean(accuracies)
 
 
-def transform_data(dataset, max_length=512):
+def transform_data(dataset, max_length=512, batch_size = 64):
     """
     dataset: pd.DataFrame
 
@@ -78,7 +78,7 @@ def transform_data(dataset, max_length=512):
     """
     sentences1 = dataset['sentence1'].tolist()
     sentences2 = dataset['sentence2'].tolist()
-    tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
+    tokenizer = AutoTokenizer.from_pretrained("facebook/bart-large")
     encodings = tokenizer(sentences1, sentences2, truncation=True, padding=True, max_length=max_length, return_tensors='pt')
     
     input_ids = encodings['input_ids']
@@ -88,11 +88,11 @@ def transform_data(dataset, max_length=512):
         binary_labels = dataset['paraphrase_types'].apply(lambda x: [1 if int(i) != 0 else 0 for i in x.strip('[]').split(', ')])
         binary_labels = torch.tensor(binary_labels.tolist())
         dataset = TensorDataset(input_ids, attention_mask, binary_labels)
-
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     else :
         dataset = TensorDataset(input_ids, attention_mask)
+        dataloader = DataLoader(dataset, batch_size=batch_size)
     
-    dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
     return dataloader
 
 

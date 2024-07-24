@@ -31,4 +31,4 @@ echo "Latest Commit: $(git rev-parse --short HEAD)"
 echo -e "Uncommitted Changes: $(git status --porcelain | wc -l)\n"
 
 # Run the script:
-python -u bart_detection.py --use_gpu --epoch 25
+python -u bart_detection.py --use_gpu

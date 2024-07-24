@@ -116,7 +116,7 @@ def train_model(model, train_data, dev_data, device, args):
     """
     ### TODO
 
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.BCELoss()
     optimizer = AdamW(model.parameters(), lr=args.lr)
 
     for epoch in range(args.epochs):

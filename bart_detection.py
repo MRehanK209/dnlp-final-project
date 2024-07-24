@@ -10,7 +10,6 @@ from tqdm import tqdm
 from transformers import AutoTokenizer, BartModel
 from optimizer import AdamW
 
-
 TQDM_DISABLE = False
 
 
@@ -94,7 +93,7 @@ def transform_data(dataset, max_length=512, batch_size = 64):
     attention_mask = encodings['attention_mask']
 
     if 'paraphrase_types' in dataset.columns:
-        binary_labels = torch.tensor(dataset["paraphrase_types"].tolist())
+        binary_labels = torch.tensor(convert_labels_to_binary(dataset["paraphrase_types"].tolist()))
         dataset = TensorDataset(input_ids, attention_mask, binary_labels)
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     else :
@@ -121,48 +120,32 @@ def train_model(model, train_data, dev_data, device, args):
     optimizer = AdamW(model.parameters(), lr=args.lr)
 
     for epoch in range(args.epochs):
+        model.train() 
+        total_loss = 0
         all_pred = []
         all_labels = []
-        model.train()
-        train_loss = 0
-        num_batches = 0
+
         for batch in tqdm(train_data, desc=f"Training Epoch {epoch + 1}", disable=TQDM_DISABLE):
-            optimizer.zero_grad()
-
-            input_ids, attention_mask, labels = batch
-
-            input_ids = input_ids.to(device)
-            attention_mask = attention_mask.to(device)
-            labels = labels.to(device)
-
-            logits = model(input_ids,attention_mask)
-            loss = criterion(logits, labels.float())
-
+            input_ids, attention_mask, labels = [b.to(device) for b in batch]
+            optimizer.zero_grad()  
+            
+            outputs = model(input_ids, attention_mask)
+            loss = criterion(outputs, labels.float())
             loss.backward()
             optimizer.step()
 
-            train_loss += loss.item()
-            num_batches += 1
+            total_loss += loss.item()
+            all_pred.extend((outputs > 0.5).int().cpu().numpy())
+            all_labels.extend(labels.int().cpu().numpy())
 
-            predicted_labels = (logits > 0.5).int()
-            all_pred.append(predicted_labels)
-            all_labels.append(labels)
+        avg_loss = total_loss / len(train_data)
+        train_accuracy = accuracy_binary(np.array(all_pred), np.array(all_labels))
+        validation_accuracy = evaluate_model(model, dev_data, device)
 
-        all_predictions = torch.cat(all_pred, dim=0)
-        all_true_labels = torch.cat(all_labels, dim=0)
-
-        true_labels_np = all_true_labels.cpu().numpy()
-        predicted_labels_np = all_predictions.cpu().numpy()
-
-        training_acc = accuracy_binary(predicted_labels_np,true_labels_np)
-        epoch_train_loss = train_loss/num_batches
-        print(f"Training Epoch {epoch + 1} Training Loss: {epoch_train_loss:.4f}")
-        print(f"Training Epoch {epoch + 1} Training Accuracy: {training_acc:.4f}")
-        validation_acc = evaluate_model(model, dev_data, device)
-        print(f"Training Epoch {epoch + 1} Validation Accuracy: {validation_acc:.4f}")
+        print(f"Epoch {epoch+1}/{args.epochs}:")
+        print(f"Training Loss: {avg_loss:.4f}, Training Accuracy: {train_accuracy:.4f}, Validation Accuracy: {validation_accuracy:.4f}")
 
     return model
-
 
 def test_model(model, test_data, test_ids, device):
     """
@@ -248,17 +231,15 @@ def finetune_paraphrase_detection(args):
 
     # TODO You might do a split of the train data into train/validation set here
     # (or in the csv files directly)
-    train_dataset = pd.read_csv("data/etpc-paraphrase-train.csv", sep="\t")
-    train_dataset['binary_labels'] = convert_labels_to_binary(train_dataset['paraphrase_types'])
-    train_dataset.drop(['paraphrase_types'], axis = 1, inplace=True)
-    train_dataset.rename(columns={"binary_labels": "paraphrase_types"}, inplace=True)
-    train_dataset = train_dataset.sample(frac=1, random_state=42).reset_index(drop=True)
 
-    train_ratio = 0.7
-    train_size = int(train_ratio * len(train_dataset))
-    train_df = train_dataset.iloc[:train_size]
-    dev_df = train_dataset.iloc[train_size:]
-    
+    np.random.seed(42)
+    train_ratio = 0.8
+    shuffled_indices = np.random.permutation(np.arange(train_dataset.shape[0]))
+    data_shuffled = train_dataset.iloc[shuffled_indices]
+    train_size = int(train_ratio * len(data_shuffled))
+    train_df = data_shuffled.iloc[:train_size]
+    dev_df = data_shuffled.iloc[train_size:]
+
     train_data = transform_data(train_df)
     dev_data = transform_data(dev_df)
     test_data = transform_data(test_dataset)
@@ -284,9 +265,4 @@ if __name__ == "__main__":
     args = get_args()
     seed_everything(args.seed)
     finetune_paraphrase_detection(args)
-    # train_dataset = pd.read_csv("data/etpc-paraphrase-train.csv", sep="\t")
-    # train_dataset['binary_labels'] = convert_labels_to_binary(train_dataset['paraphrase_types'])
-    # print(train_dataset[['paraphrase_types','binary_labels']].sample(10))
-    # train_dataset.drop(['paraphrase_types'], axis = 1, inplace=True)
-    # train_dataset.rename(columns={"binary_labels": "paraphrase_types"}, inplace=True)
-    # train_dataset = train_dataset.sample(frac=1, random_state=42).reset_index(drop=True)
+

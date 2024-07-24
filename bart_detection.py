@@ -57,6 +57,15 @@ def accuracy_binary(predicted_labels_np,true_labels_np):
         accuracies.append(label_accuracy)
     return np.mean(accuracies)
 
+def convert_labels_to_binary(paraphrase_types, num_labels=7):
+    binary_labels = []
+    for types in paraphrase_types:
+        binary_label = [0] * num_labels
+        for t in eval(types):
+            if t != 0:
+                binary_label[t-1] = 1 
+        binary_labels.append(binary_label)
+    return binary_labels
 
 def transform_data(dataset, max_length=512, batch_size = 64):
     """
@@ -85,8 +94,7 @@ def transform_data(dataset, max_length=512, batch_size = 64):
     attention_mask = encodings['attention_mask']
 
     if 'paraphrase_types' in dataset.columns:
-        binary_labels = dataset['paraphrase_types'].apply(lambda x: [1 if int(i) != 0 else 0 for i in x.strip('[]').split(', ')])
-        binary_labels = torch.tensor(binary_labels.tolist())
+        binary_labels = torch.tensor(dataset["paraphrase_types"].tolist())
         dataset = TensorDataset(input_ids, attention_mask, binary_labels)
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     else :
@@ -240,8 +248,12 @@ def finetune_paraphrase_detection(args):
 
     # TODO You might do a split of the train data into train/validation set here
     # (or in the csv files directly)
-
+    train_dataset = pd.read_csv("data/etpc-paraphrase-train.csv", sep="\t")
+    train_dataset['binary_labels'] = convert_labels_to_binary(train_dataset['paraphrase_types'])
+    train_dataset.drop(['paraphrase_types'], axis = 1, inplace=True)
+    train_dataset.rename(columns={"binary_labels": "paraphrase_types"}, inplace=True)
     train_dataset = train_dataset.sample(frac=1, random_state=42).reset_index(drop=True)
+
     train_ratio = 0.7
     train_size = int(train_ratio * len(train_dataset))
     train_df = train_dataset.iloc[:train_size]
@@ -250,6 +262,7 @@ def finetune_paraphrase_detection(args):
     train_data = transform_data(train_df)
     dev_data = transform_data(dev_df)
     test_data = transform_data(test_dataset)
+
 
     print(f"Loaded {len(train_dataset)} training samples.")
 
@@ -271,3 +284,9 @@ if __name__ == "__main__":
     args = get_args()
     seed_everything(args.seed)
     finetune_paraphrase_detection(args)
+    # train_dataset = pd.read_csv("data/etpc-paraphrase-train.csv", sep="\t")
+    # train_dataset['binary_labels'] = convert_labels_to_binary(train_dataset['paraphrase_types'])
+    # print(train_dataset[['paraphrase_types','binary_labels']].sample(10))
+    # train_dataset.drop(['paraphrase_types'], axis = 1, inplace=True)
+    # train_dataset.rename(columns={"binary_labels": "paraphrase_types"}, inplace=True)
+    # train_dataset = train_dataset.sample(frac=1, random_state=42).reset_index(drop=True)

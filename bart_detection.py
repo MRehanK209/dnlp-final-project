@@ -8,6 +8,7 @@ from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 from transformers import AutoTokenizer, BartModel
+from sklearn.metrics import matthews_corrcoef
 from optimizer import AdamW
 
 TQDM_DISABLE = False
@@ -47,6 +48,7 @@ def get_args():
 
 def accuracy_binary(predicted_labels_np,true_labels_np):
     accuracies = []
+    matthews_coefficients = []
     for label_idx in range(true_labels_np.shape[1]):
         correct_predictions = np.sum(
             true_labels_np[:, label_idx] == predicted_labels_np[:, label_idx]
@@ -54,7 +56,10 @@ def accuracy_binary(predicted_labels_np,true_labels_np):
         total_predictions = true_labels_np.shape[0]
         label_accuracy = correct_predictions / total_predictions
         accuracies.append(label_accuracy)
-    return np.mean(accuracies)
+        #compute Matthwes Correlation Coefficient for each paraphrase type
+        matth_coef = matthews_corrcoef(true_labels_np[:,label_idx], predicted_labels_np[:,label_idx])
+        matthews_coefficients.append(matth_coef)
+    return np.mean(accuracies), np.mean(matthews_coefficients)
 
 def convert_labels_to_binary(paraphrase_types, num_labels=7):
     binary_labels = []
@@ -103,7 +108,7 @@ def transform_data(dataset, max_length=512, batch_size = 64):
     return dataloader
 
 
-def train_model(model, train_data, dev_data, device, args):
+def train_model(model, train_data, dev_data, weight_tensor, device, args):
     """
     Train the model. You can use any training loop you want. We recommend starting with
     AdamW as your optimizer. You can take a look at the SST training loop for reference.
@@ -116,7 +121,7 @@ def train_model(model, train_data, dev_data, device, args):
     """
     ### TODO
 
-    criterion = nn.BCELoss()
+    criterion = nn.BCELoss(weight = weight_tensor)
     optimizer = AdamW(model.parameters(), lr=args.lr)
 
     for epoch in range(args.epochs):
@@ -130,6 +135,7 @@ def train_model(model, train_data, dev_data, device, args):
             optimizer.zero_grad()  
             
             outputs = model(input_ids, attention_mask)
+
             loss = criterion(outputs, labels.float())
             loss.backward()
             optimizer.step()
@@ -139,12 +145,12 @@ def train_model(model, train_data, dev_data, device, args):
             all_labels.extend(labels.int().cpu().numpy())
 
         avg_loss = total_loss / len(train_data)
-        train_accuracy = accuracy_binary(np.array(all_pred), np.array(all_labels))
-        validation_accuracy = evaluate_model(model, dev_data, device)
+        train_accuracy, train_mathhews_coefficient = accuracy_binary(np.array(all_pred), np.array(all_labels))
+        validation_accuracy, validation_mathhews_coefficient = evaluate_model(model, dev_data, device)
 
         print(f"Epoch {epoch+1}/{args.epochs}:")
-        print(f"Training Loss: {avg_loss:.4f}, Training Accuracy: {train_accuracy:.4f}, Validation Accuracy: {validation_accuracy:.4f}")
-
+        print(f"Training Loss: {avg_loss:.4f}, Training Accuracy: {train_accuracy:.4f}, Training Mathew Coefficient: {train_mathhews_coefficient:.4f}")
+        print(f"Validation Accuracy: {validation_accuracy:.4f}, Validation Mathew Coefficient: {validation_mathhews_coefficient:.4f}")
     return model
 
 def test_model(model, test_data, test_ids, device):
@@ -207,8 +213,8 @@ def evaluate_model(model, test_data, device):
     true_labels_np = all_true_labels.cpu().numpy()
     predicted_labels_np = all_predictions.cpu().numpy()
 
-    accuracy1 = accuracy_binary(predicted_labels_np,true_labels_np)
-    return accuracy1
+    accuracy1, mathhews_coefficient1 = accuracy_binary(predicted_labels_np,true_labels_np)
+    return accuracy1,mathhews_coefficient1
 
 
 def seed_everything(seed=11711):
@@ -244,15 +250,29 @@ def finetune_paraphrase_detection(args):
     dev_data = transform_data(dev_df)
     test_data = transform_data(test_dataset)
 
+    # Calculating the relative weight for each class wrt to minimum samples of a class
+    
+    # binary_label = np.array(convert_labels_to_binary(train_df["paraphrase_types"].tolist()))
+    # class_counts = np.sum(binary_label, axis=0)
+    # total_samples = binary_label.shape[0]
+    # class_weights =  class_counts/total_samples
+    # class_weights = class_weights / np.min(class_weights)
+    # class_weights = np.floor(class_weights)
 
+    class_weights = [1.0,1.5,1.0,1.0,1.0,1.5,1.5]
+    weight_tensor = torch.tensor(class_weights, dtype=torch.float)
+    weight_tensor = weight_tensor.to(device) 
+    print(weight_tensor)
     print(f"Loaded {len(train_dataset)} training samples.")
 
-    model = train_model(model, train_data, dev_data, device,args)
+    
+    model = train_model(model, train_data, dev_data,weight_tensor, device,args)
 
     print("Training finished.")
 
-    accuracy = evaluate_model(model, dev_data, device)
+    accuracy, matthews_corr = evaluate_model(model, train_data, device)
     print(f"The accuracy of the model is: {accuracy:.3f}")
+    print(f"Matthews Correlation Coefficient of the model is: {matthews_corr:.3f}")
 
     test_ids = test_dataset["id"]
     test_results = test_model(model, test_data, test_ids, device)
@@ -265,4 +285,3 @@ if __name__ == "__main__":
     args = get_args()
     seed_everything(args.seed)
     finetune_paraphrase_detection(args)
-

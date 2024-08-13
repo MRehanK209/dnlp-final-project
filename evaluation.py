@@ -17,6 +17,7 @@ explicitly aside from model_eval_multitask.
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -58,6 +59,17 @@ def model_eval_multitask(
                 b_mask1 = b_mask1.to(device)
                 b_ids2 = b_ids2.to(device)
                 b_mask2 = b_mask2.to(device)
+                
+                # Get embeddings
+                #embeddings1 = model.get_embeddings(b_ids1, b_mask1)
+                #embeddings2 = model.get_embeddings(b_ids2, b_mask2)
+
+                # Calculate cosine similarity between embeddings
+                #cosine_sim = F.cosine_similarity(embeddings1, embeddings2)
+
+                # Convert cosine similarity to binary predictions
+                #y_hat = (cosine_sim > 0).long().cpu().numpy()  # Predict 1 if similarity > 0, else 0
+                #b_labels = b_labels.cpu().numpy()  # 
 
                 logits = model.predict_paraphrase(b_ids1, b_mask1, b_ids2, b_mask2)
                 y_hat = logits.sigmoid().round().flatten().cpu().numpy()
@@ -231,7 +243,7 @@ def model_eval_test_multitask(
                 b_ids2 = b_ids2.to(device)
                 b_mask2 = b_mask2.to(device)
 
-                logits = model.predict_paraphrase(b_ids1, b_mask1, b_ids2, b_mask2)
+                logits = model.predict_paraphrase(b_ids1, b_mask1, b_ids2, b_mask2)[2]
                 y_hat = logits.sigmoid().round().flatten().cpu().numpy()
 
                 quora_y_pred.extend(y_hat)

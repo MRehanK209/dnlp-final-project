@@ -30,16 +30,32 @@ class BertPreTrainedModel(nn.Module):
         self.apply(self._init_weights)
 
     def _init_weights(self, module):
-        """Initialize the weights"""
-        if isinstance(module, (nn.Linear, nn.Embedding)):
-            # Slightly different from the TF version which uses truncated_normal for initialization
-            # cf https://github.com/pytorch/pytorch/pull/5617
-            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+       #"""Initialize the weights"""
+        if isinstance(module, nn.Linear):
+        # Xavier/Glorot initialization for Linear layers
+            nn.init.xavier_uniform_(module.weight)
+            #nn.init.kaiming_normal_(module.weight, mode='fan_in', nonlinearity='relu')
+            if module.bias is not None:
+                module.bias.data.zero_()
+        elif isinstance(module, nn.Embedding):
+            nn.init.trunc_normal_(module.weight, mean=0.0, std=self.config.initializer_range, a=-2*self.config.initializer_range, b=2*self.config.initializer_range)
+        # Use small uniform distribution for embedding layers
+            #nn.init.uniform_(module.weight, -0.1, 0.1)
         elif isinstance(module, nn.LayerNorm):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
-        if isinstance(module, nn.Linear) and module.bias is not None:
-            module.bias.data.zero_()
+
+    #def _init_weights(self, module):
+        #"""Initialize the weights"""
+        #if isinstance(module, (nn.Linear, nn.Embedding)):
+            # Slightly different from the TF version which uses truncated_normal for initialization
+            # cf https://github.com/pytorch/pytorch/pull/5617
+            #module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+        #elif isinstance(module, nn.LayerNorm):
+            #module.bias.data.zero_()
+            #module.weight.data.fill_(1.0)
+        #if isinstance(module, nn.Linear) and module.bias is not None:
+            #module.bias.data.zero_()
 
     @property
     def dtype(self) -> dtype:

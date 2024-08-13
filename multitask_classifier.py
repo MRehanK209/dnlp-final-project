@@ -90,7 +90,9 @@ class MultitaskBERT(nn.Module):
         pooled_output = self.forward(input_ids, attention_mask)
         logits = self.sst_classifier(pooled_output)
         return logits
-
+    
+    def get_embeddings(self, input_ids, attention_mask):
+        return self.forward(input_ids, attention_mask)
     def predict_paraphrase(self, input_ids_1, attention_mask_1, input_ids_2, attention_mask_2):
         """
         Given a batch of pairs of sentences, outputs a single logit for predicting whether they are paraphrases.
@@ -98,10 +100,11 @@ class MultitaskBERT(nn.Module):
         during evaluation, and handled as a logit by the appropriate loss function.
         Dataset: Quora
         """
-        embeddings_1 = self.forward(input_ids_1, attention_mask_1)
-        embeddings_2 = self.forward(input_ids_2, attention_mask_2)
+        embeddings_1 = self.get_embeddings(input_ids_1, attention_mask_1)
+        embeddings_2 = self.get_embeddings(input_ids_2, attention_mask_2)
         concatenated = torch.cat((embeddings_1, embeddings_2), dim=1)
         logits = self.paraphrase_classifier(concatenated)
+        #return logits.squeeze()
         return logits.squeeze()
 
     def predict_similarity(self, input_ids_1, attention_mask_1, input_ids_2, attention_mask_2):
@@ -311,7 +314,6 @@ def train_multitask(args):
                 train_loss += loss.item()
                 num_batches += 1
 
-
         if args.task == "qqp" or args.task == "multitask":
             # Train the model on the qqp dataset.
             for batch in tqdm(
@@ -332,9 +334,18 @@ def train_multitask(args):
                 b_labels = b_labels.to(device)
 
                 optimizer.zero_grad()
+                #embeddings1 = model.get_embeddings(b_ids_1, b_mask_1)
+                #embeddings2 = model.get_embeddings(b_ids_2, b_mask_2)
+        
+                 # Convert binary labels to {-1, 1} for CosineEmbeddingLoss
+                #target = (2 * b_labels - 1).float()
+        
+                #loss = nn.CosineEmbeddingLoss()(embeddings1, embeddings2, target)
+                
                 logits = model.predict_paraphrase(b_ids_1, b_mask_1, b_ids_2, b_mask_2)
                 loss = F.binary_cross_entropy_with_logits(logits, b_labels.float())
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
 
                 train_loss += loss.item()

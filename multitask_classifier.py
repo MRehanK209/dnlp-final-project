@@ -65,7 +65,8 @@ class MultitaskBERT(nn.Module):
             elif config.option == "finetune":
                 param.requires_grad = True
         ### TODO
-        raise NotImplementedError
+        self.sentiment_classifier = nn.Linear(self.bert.config.hidden_size, N_SENTIMENT_CLASSES)
+        #raise NotImplementedError
 
     def forward(self, input_ids, attention_mask):
         """Takes a batch of sentences and produces embeddings for them."""
@@ -75,7 +76,11 @@ class MultitaskBERT(nn.Module):
         # Here, you can start by just returning the embeddings straight from BERT.
         # When thinking of improvements, you can later try modifying this
         # (e.g., by adding other layers).
+        outputs = self.bert(input_ids, attention_mask=attention_mask)
+        pooled_output = outputs['pooler_output']
+        return pooled_output
         ### TODO
+        
         raise NotImplementedError
 
     def predict_sentiment(self, input_ids, attention_mask):
@@ -87,6 +92,9 @@ class MultitaskBERT(nn.Module):
         Dataset: SST
         """
         ### TODO
+        pooled_output = self.forward(input_ids, attention_mask)
+        sentiment_logits = self.sentiment_classifier(pooled_output)
+        return sentiment_logits
         raise NotImplementedError
 
     def predict_paraphrase(self, input_ids_1, attention_mask_1, input_ids_2, attention_mask_2):
@@ -175,6 +183,57 @@ def train_multitask(args):
             shuffle=False,
             batch_size=args.batch_size,
             collate_fn=sst_dev_data.collate_fn,
+        )
+    
+    if args.task == "paraphrase" or args.task == "multitask":
+        paraphrase_train_data = SentencePairDataset(paraphrase_train_data, args)
+        paraphrase_dev_data = SentencePairDataset(paraphrase_dev_data, args)
+
+        paraphrase_train_dataloader = DataLoader(
+            paraphrase_train_data,
+            shuffle=True,
+            batch_size=args.batch_size,
+            collate_fn=paraphrase_train_data.collate_fn,
+        )
+        paraphrase_dev_dataloader = DataLoader(
+            paraphrase_dev_data,
+            shuffle=False,
+            batch_size=args.batch_size,
+            collate_fn=paraphrase_dev_data.collate_fn,
+        )
+
+    if args.task == "sts" or args.task == "multitask":
+        sts_train_data = SentencePairDataset(sts_train_data, args)
+        sts_dev_data = SentencePairDataset(sts_dev_data, args)
+
+        sts_train_dataloader = DataLoader(
+            sts_train_data,
+            shuffle=True,
+            batch_size=args.batch_size,
+            collate_fn=sts_train_data.collate_fn,
+        )
+        sts_dev_dataloader = DataLoader(
+            sts_dev_data,
+            shuffle=False,
+            batch_size=args.batch_size,
+            collate_fn=sts_dev_data.collate_fn,
+        )
+
+    if args.task == "paraphrase_type" or args.task == "multitask":
+        paraphrase_type_train_data = SentenceClassificationDataset(paraphrase_type_train_data, args)
+        paraphrase_type_dev_data = SentenceClassificationDataset(paraphrase_type_dev_data, args)
+
+        paraphrase_type_train_dataloader = DataLoader(
+            paraphrase_type_train_data,
+            shuffle=True,
+            batch_size=args.batch_size,
+            collate_fn=paraphrase_type_train_data.collate_fn,
+        )
+        paraphrase_type_dev_dataloader = DataLoader(
+            paraphrase_type_dev_data,
+            shuffle=False,
+            batch_size=args.batch_size,
+            collate_fn=paraphrase_type_dev_data.collate_fn,
         )
 
     ### TODO
@@ -284,7 +343,8 @@ def train_multitask(args):
             "sts": (sts_train_corr, sts_dev_corr),
             "qqp": (quora_train_acc, quora_dev_acc),
             "etpc": (etpc_train_acc, etpc_dev_acc),
-            "multitask": (0, 0),  # TODO
+            "multitask": ((sst_train_acc + quora_train_acc + sts_train_corr + etpc_train_acc) / 4, 
+                          (sst_dev_acc + quora_dev_acc + sts_dev_corr + etpc_dev_acc) / 4)  # TODO
         }[args.task]
 
         print(

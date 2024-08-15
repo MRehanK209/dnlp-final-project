@@ -47,27 +47,33 @@ class AdamW(Optimizer):
                         "Adam does not support sparse gradients, please consider SparseAdam instead"
                     )
 
-                # State should be stored in this dictionary
                 state = self.state[p]
 
-                # Access hyperparameters from the `group` dictionary
-                alpha = group["lr"]
+                if len(state) == 0:
+                    state["step"] = 0
+                    state["exp_avg"] = torch.zeros_like(p.data)
+                    state["exp_avg_sq"] = torch.zeros_like(p.data)
 
-                # Complete the implementation of AdamW here, reading and saving
-                # your state in the `state` dictionary above.
-                # The hyperparameters can be read from the `group` dictionary
-                # (they are lr, betas, eps, weight_decay, and correct_bias, as saved in
-                # the constructor).
-                #
-                # 1- Update first and second moments of the gradients.
-                # 2- Apply bias correction.
-                #    (using the "efficient version" given in https://arxiv.org/abs/1412.6980;
-                #     also given as the pseudo-code in the project description).
-                # 3- Update parameters (p.data).
-                # 4- After that main gradient-based update, update again using weight decay
-                #    (incorporating the learning rate again).
+                exp_avg, exp_avg_sq = state["exp_avg"], state["exp_avg_sq"]
+                beta1, beta2 = group["betas"]
 
-                ### TODO
-                raise NotImplementedError
+                state["step"] += 1
+
+                exp_avg.mul_(beta1).add_(1 - beta1, grad)
+                exp_avg_sq.mul_(beta2).addcmul_(1 - beta2, grad, grad)
+
+                # Apply bias correction
+                if group["correct_bias"]:
+                    bias_correction1 = 1 - beta1 ** state["step"]
+                    bias_correction2 = 1 - beta2 ** state["step"]
+                    step_size = group["lr"] * math.sqrt(bias_correction2) / bias_correction1
+                else:
+                    step_size = group["lr"]
+
+                denom = exp_avg_sq.sqrt().add_(group["eps"])
+                p.data.addcdiv_(-step_size, exp_avg, denom)
+
+                if group["weight_decay"] != 0:
+                    p.data.add_(-group["lr"] * group["weight_decay"], p.data)
 
         return loss

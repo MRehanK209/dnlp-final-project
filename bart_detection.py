@@ -55,6 +55,30 @@ def transform_data(dataset, max_length=512):
     Return a DataLoader with the TensorDataset. You can choose a batch size of your
     choice.
     """
+    sentences = dataset['sentence']
+
+    tokenizer = AutoTokenizer.from_pretrained('facebook/bart-large')
+    inputs = tokenizer.batch_encode_plus(sentences, 
+                                          add_special_tokens=True, 
+                                          max_length=max_length, 
+                                          padding='max_length', 
+                                          truncation=True, 
+                                          return_attention_mask=True, 
+                                          return_tensors='pt')
+
+    if 'paraphrase_types' in dataset.columns:
+        labels = dataset['paraphrase_types'].apply(lambda x: [1 if i in x else 0 for i in range(7)])
+        labels = torch.tensor(labels.tolist())
+    else:
+        labels = None
+
+    if labels is not None:
+        dataset = TensorDataset(inputs['input_ids'], inputs['attention_mask'], labels)
+    else:
+        dataset = TensorDataset(inputs['input_ids'], inputs['attention_mask'])
+    data_loader = DataLoader(dataset, batch_size=32, shuffle=True)
+
+    return data_loader
     raise NotImplementedError
 
 
@@ -69,6 +93,44 @@ def train_model(model, train_data, dev_data, device):
 
     Return the trained model.
     """
+    model.to(device)
+
+    train_loader = DataLoader(train_data, batch_size=32, shuffle=True)
+    dev_loader = DataLoader(dev_data, batch_size=32, shuffle=False)
+
+    optimizer = AdamW(model.parameters(), lr=1e-5)
+    loss_fn = torch.nn.CrossEntropyLoss()
+
+    for epoch in range(5):
+        model.train()
+        total_loss = 0
+        total_correct = 0
+        for batch in train_loader:
+            input_ids = batch['input_ids'].to(device)
+            attention_mask = batch['attention_mask'].to(device)
+            labels = batch['labels'].to(device)
+
+            optimizer.zero_grad()
+
+            outputs = model(input_ids, attention_mask=attention_mask, labels=labels)
+            loss = loss_fn(outputs, labels)
+
+            loss.backward()
+
+            optimizer.step()
+
+            total_loss += loss.item()
+            _, predicted = torch.max(outputs.scores, 1)
+            total_correct += (predicted == labels).sum().item()
+
+        train_loss = total_loss / len(train_loader)
+        train_accuracy = total_correct / len(train_data)
+
+        dev_accuracy = evaluate_model(model, dev_loader, device)
+
+        print(f'Epoch {epoch+1}, Train Loss: {train_loss:.4f}, Train Acc: {train_accuracy:.4f}, Dev Acc: {dev_accuracy:.4f}')
+
+    return model
     ### TODO
     raise NotImplementedError
 
@@ -81,6 +143,23 @@ def test_model(model, test_data, test_ids, device):
     The 'Predicted_Paraphrase_Types' column should contain the binary array of your model predictions.
     Return this dataframe.
     """
+    model.to(device)
+
+    test_loader = DataLoader(test_data, batch_size=32, shuffle=False)
+    predictions = []
+
+    model.eval()
+    with torch.no_grad():
+        for batch in test_loader:
+            input_ids = batch['input_ids'].to(device)
+            attention_mask = batch['attention_mask'].to(device)
+            outputs = model(input_ids, attention_mask=attention_mask)
+            _, predicted = torch.max(outputs.scores, 1)
+            predictions.extend(predicted.cpu().numpy())
+
+    results = pd.DataFrame({'id': test_ids, 'Predicted_Paraphrase_Types': predictions})
+
+    return results
     ### TODO
 
     raise NotImplementedError

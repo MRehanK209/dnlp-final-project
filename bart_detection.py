@@ -4,8 +4,7 @@ import random
 import numpy as np
 import pandas as pd
 import torch
-from torch import nn    
-import torch.nn.functional as F
+from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 from transformers import AutoTokenizer, BartModel
@@ -13,22 +12,6 @@ from sklearn.metrics import matthews_corrcoef
 from optimizer import AdamW
 
 TQDM_DISABLE = False
-
-def get_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--seed", type=int, default=11711)
-    parser.add_argument("--use_gpu", action="store_true")
-    parser.add_argument("--epochs", type=int, default=10)
-    parser.add_argument("--lr", type=int, default=1e-5)
-    parser.add_argument("--loss_fn", type=str, default="BCE", choices=["BCE", "Focal"])
-    parser.add_argument("--use_smart_reg", type=str, default="No", choices=["No", "Yes"])
-    parser.add_argument("--use_weight", type=str, default="None", choices=["None", "Deterministic","Fixed"])
-    args = parser.parse_args()
-
-    if args.loss_fn == "Focal" and args.use_weight != "None":
-        print("Updating the use_weight to No for Focal Loss")
-        args.use_weight = "No"
-    return args
 
 
 class BartWithClassifier(nn.Module):
@@ -51,63 +34,17 @@ class BartWithClassifier(nn.Module):
         # Return the probabilities
         probabilities = self.sigmoid(logits)
         return probabilities
+        
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--seed", type=int, default=11711)
+    parser.add_argument("--use_gpu", action="store_true")
+    parser.add_argument("--epochs", type=int, default=10)
+    parser.add_argument("--lr", type=int, default=1e-5)
+    parser.add_argument("--use_weight", type=str, default="None", choices=["None", "Deterministic","Fixed"])
     
-def smoothness_inducing_loss(model, inputs, labels, criterion, epsilon=1e-6, lambda_reg=0.01):
-    # Get the input embeddings from the BART model
-    input_embeddings = model.bart.encoder.embed_tokens(inputs['input_ids'])
-    
-    # Add the small Gaussian noise to the embeddings
-    noise = torch.randn_like(input_embeddings) * epsilon
-    perturbed_embeddings = input_embeddings + noise
-
-    # Forward pass with the original inputs
-    original_output = model(input_ids=inputs['input_ids'], attention_mask=inputs['attention_mask'])
-    
-    # Forward pass with the perturbed embeddings
-    perturbed_output = model.bart(
-        inputs_embeds=perturbed_embeddings, 
-        attention_mask=inputs['attention_mask'],
-        decoder_input_ids=inputs['input_ids']  
-    )
-    perturbed_output = model.classifier(perturbed_output.last_hidden_state[:, 0, :])
-    perturbed_output = model.sigmoid(perturbed_output)
-
-    # Calculate the original loss
-    original_loss = criterion(original_output, labels.float())
-    
-    # Calculate the smoothness regularization term (L2 norm)
-    smoothness_loss = torch.mean(torch.norm(original_output - perturbed_output, p=2, dim=-1))
-    
-    # Combine the original loss with the smoothness regularization term
-    total_loss = original_loss + lambda_reg * smoothness_loss
-    
-    return total_loss
-
-def bregman_proximal_point_update(optimizer, model, original_params, eta=1e-5):
-    # Apply the Bregman proximal point update
-    with torch.no_grad():
-        for param, original_param in zip(model.parameters(), original_params):
-            param.copy_(param - eta * (param - original_param))
-
-class FocalLoss(nn.Module):
-    def __init__(self, alpha=1, gamma=2, reduction='mean'):
-        super(FocalLoss, self).__init__()
-        self.alpha = alpha
-        self.gamma = gamma
-        self.reduction = reduction
-
-    def forward(self, inputs, targets):
-
-        BCE_loss = nn.BCELoss(reduction='none')(inputs, targets)
-        pt = torch.exp(-BCE_loss) 
-        F_loss = self.alpha * (1 - pt) ** self.gamma * BCE_loss
-
-        if self.reduction == 'mean':
-            return F_loss.mean()
-        elif self.reduction == 'sum':
-            return F_loss.sum()
-        else:
-            return F_loss
+    args = parser.parse_args()
+    return args
 
 
 def accuracy_binary(predicted_labels_np,true_labels_np):
@@ -135,7 +72,47 @@ def convert_labels_to_binary(paraphrase_types, num_labels=7):
         binary_labels.append(binary_label)
     return binary_labels
 
-def transform_data(dataset, max_length=512, batch_size = 32):
+def smoothness_inducing_loss(model, inputs, labels, criterion, epsilon=1e-6, lambda_reg=0.01):
+    # Get the input embeddings from the BART model
+    input_embeddings = model.bart.encoder.embed_tokens(inputs['input_ids'])
+    
+    # Add the small Gaussian noise to the embeddings
+    noise = torch.randn_like(input_embeddings) * epsilon
+    perturbed_embeddings = input_embeddings + noise
+
+    # Forward pass with the original inputs
+    original_output = model(input_ids=inputs['input_ids'], attention_mask=inputs['attention_mask'])
+    
+    # Forward pass with the perturbed embeddings
+    perturbed_output = model.bart(
+        inputs_embeds=perturbed_embeddings, 
+        attention_mask=inputs['attention_mask'],
+        decoder_input_ids=inputs['input_ids']  # or decoder_inputs_embeds=decoder_embeddings if you want to use embeddings
+    )
+    perturbed_output = model.classifier(perturbed_output.last_hidden_state[:, 0, :])
+    perturbed_output = model.sigmoid(perturbed_output)
+
+    # Calculate the original loss
+    original_loss = criterion(original_output, labels.float())
+    
+    # Calculate the smoothness regularization term (L2 norm)
+    smoothness_loss = torch.mean(torch.norm(original_output - perturbed_output, p=2, dim=-1))
+    
+    # Combine the original loss with the smoothness regularization term
+    total_loss = original_loss + lambda_reg * smoothness_loss
+    
+    return total_loss
+
+
+
+def bregman_proximal_point_update(optimizer, model, original_params, eta=1e-5):
+
+    # Apply the Bregman proximal point update
+    with torch.no_grad():
+        for param, original_param in zip(model.parameters(), original_params):
+            param.copy_(param - eta * (param - original_param))
+
+def transform_data(dataset, max_length=512, batch_size = 64):
     """
     dataset: pd.DataFrame
 
@@ -172,8 +149,7 @@ def transform_data(dataset, max_length=512, batch_size = 32):
     return dataloader
 
 
-
-def train_model(model, train_data, dev_data, weight_tensor, device, args):
+def train_model(model, train_data, dev_data,weight_tensor, device, args):
     """
     Train the model. You can use any training loop you want. We recommend starting with
     AdamW as your optimizer. You can take a look at the SST training loop for reference.
@@ -186,15 +162,11 @@ def train_model(model, train_data, dev_data, weight_tensor, device, args):
     """
     ### TODO
 
-    if args.loss_fn == "BCE":
-        print("Using the BCE Loss for the Training")
-        criterion = nn.BCELoss(weight=weight_tensor)
-    elif args.loss_fn == "Focal":
-        print("Using the Focal Loss for the training")
-        criterion = FocalLoss(alpha=1, gamma=2)
-
+    # criterion = FocalLoss()
+    criterion = nn.BCELoss(weight = weight_tensor)
     optimizer = AdamW(model.parameters(), lr=args.lr)
-
+    lambda_reg = 0.01
+    eta = 1e-5
     for epoch in range(args.epochs):
         model.train() 
         total_loss = 0
@@ -203,24 +175,26 @@ def train_model(model, train_data, dev_data, weight_tensor, device, args):
 
         for batch in tqdm(train_data, desc=f"Training Epoch {epoch + 1}", disable=TQDM_DISABLE):
             input_ids, attention_mask, labels = [b.to(device) for b in batch]
-            optimizer.zero_grad()  
-            
-            outputs = model(input_ids, attention_mask)
+            optimizer.zero_grad()
+
+            # Store original parameters before update
+            original_params = [param.clone() for param in model.parameters()]
+
+            # Prepare inputs for the model
             inputs = {'input_ids': input_ids, 'attention_mask': attention_mask}
 
-            if args.use_smart_reg == "Yes":
-                original_params = [param.clone().detach() for param in model.parameters()]
-                loss = smoothness_inducing_loss(model, inputs, labels, criterion)
-                loss.backward()
-                optimizer.step()
-                bregman_proximal_point_update(optimizer, model, original_params)
-            elif args.use_smart_reg == "No":
-                loss = criterion(outputs, labels.float())
-                loss.backward()
-                optimizer.step()
+            # Apply smoothness-inducing loss
+            loss = smoothness_inducing_loss(model, inputs, labels, criterion)
+            loss.backward()
+
+            # Perform the optimization step
+            optimizer.step()
+
+            # Apply the Bregman proximal point update
+            bregman_proximal_point_update(optimizer, model, original_params, eta=eta)
 
             total_loss += loss.item()
-            all_pred.extend((outputs > 0.5).int().cpu().numpy())
+            all_pred.extend((model(**inputs) > 0.5).int().cpu().numpy())
             all_labels.extend(labels.int().cpu().numpy())
 
         avg_loss = total_loss / len(train_data)
@@ -280,8 +254,6 @@ def evaluate_model(model, test_data, device):
             input_ids = input_ids.to(device)
             attention_mask = attention_mask.to(device)
 
-            inputs = {'input_ids': input_ids, 'attention_mask': attention_mask}
-
             outputs = model(input_ids=input_ids, attention_mask=attention_mask)
             predicted_labels = (outputs > 0.5).int()
 
@@ -310,6 +282,8 @@ def seed_everything(seed=11711):
 
 def finetune_paraphrase_detection(args):
     model = BartWithClassifier()
+    # model.bart.gradient_checkpointing_enable()
+
     device = torch.device("cuda") if args.use_gpu else torch.device("cpu")
     model = model.to(device)
 
@@ -330,12 +304,12 @@ def finetune_paraphrase_detection(args):
     train_data = transform_data(train_df)
     dev_data = transform_data(dev_df)
     test_data = transform_data(test_dataset)
+
     if args.use_weight == "Fixed":
         class_weights = [1.5,1.0,1.5,1.5,1.5,1.0,1.0]
         weight_tensor = torch.tensor(class_weights, dtype=torch.float)
         weight_tensor = weight_tensor.to(device) 
     elif args.use_weight == "Deterministic":
-        labels = convert_labels_to_binary(train_df["paraphrase_types"])
         class_frequencies = np.mean(convert_labels_to_binary(train_df["paraphrase_types"]), axis=0)
         inverse_class_frequencies = 1.0 / class_frequencies
         weight_tensor = torch.tensor(inverse_class_frequencies, dtype=torch.float)
@@ -346,7 +320,7 @@ def finetune_paraphrase_detection(args):
     print(f"Loaded {len(train_dataset)} training samples.")
 
     
-    model = train_model(model, train_data, dev_data,weight_tensor, device,args)
+    model = train_model(model, train_data, dev_data, weight_tensor, device,args)
 
     print("Training finished.")
 
@@ -365,3 +339,4 @@ if __name__ == "__main__":
     args = get_args()
     seed_everything(args.seed)
     finetune_paraphrase_detection(args)
+

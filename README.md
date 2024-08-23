@@ -162,7 +162,7 @@ the `logdir` directory. The best model is saved in the `models` directory.
 The model is evaluated after each epoch on the validation set. The results are printed to the console. In BART Detection, 
 the model will run for all the epochs and return the model after training on the last epoch.
 
-## Results
+## Results for BERT
 
   
 
@@ -270,8 +270,8 @@ allows for 5 degrees of similarity.
 | Tagging  | `--additional_input`  | 0.872 |
 | SophiaH  | `--optimizer sophiah` | 0.870 |
 | Baseline | | 0.866 |
-
   
+## Results for BART Detection
 
 ## Methodologies for BERT
 
@@ -667,9 +667,11 @@ The automatic mixed precision (AMP) feature of PyTorch was used to speed up trai
 
 </details>
 
-  
+## Methodologies for BART Detection  
 
-## Experiments
+
+
+## Experiments for BERT
 
   
 
@@ -695,187 +697,34 @@ We used [Ray Tune](https://docs.ray.io/en/latest/tune/index.html) to perform hyp
 
 The trained models were evaluated on the validation set. The best model was selected based on the validation results ('dev'). The metrics used for the evaluation were accuracy only for paraphrase identification and sentiment classification, and Pearson correlation for semantic textual similarity.
 
-  
 
-## PyTorch Profiler Results
+## Experiments for BART Generation
 
-  
 
-<details>
+## Experiments for BART Detection
 
-<summary>Click to expand.</summary>
-
-We utilized the<tt>pytorch_profiler</tt> integrated with TensorBoard to gain insights into the execution performance and resource utilization during our model's training on a single GPU.
-
-  
-
-### GPU Summary
-
-  
-
-- **Model:** NVIDIA A100-SXM4-80GB
-
-- **Compute Capability:** 8.0
-
-- **GPU Utilization:** 64.35%
-
-- **Estimated SM Efficiency:** 59.55%
-
-- **Estimated Achieved Occupancy:** 47.89%
-
-  
-
-### Execution Breakdown
-
-  
-
-| Category  | Time Duration (us) | Percentage (%) |
-| ----------------- | ------------------ | -------------- |
-| Average Step Time | 2,199,623  | 100  |
-| GPU Kernel  | 1,415,549  | 64.35  |
-| Memcpy  | 3,064  | 0.14 |
-| Memset  | 4,455  | 0.20 |
-| CPU Execution | 574,478  | 26.12  |
-| Other | 202,077  | 9.19 |
-
-  
-
-### Insights
-
-  
-
-The profiler results show how the model's calculations are divided. 64.35% of the execution time is taken up by GPU kernel operations, which means that most of the heavy lifting is done on the GPU. CPU-related tasks take up about a quarter (26.12%) of the total execution time. Tasks like `Memcpy` and `Memset` barely affect performance.
-
-  
-
-Given the GPU usage rate of 64.35% and the projected SM effectiveness, there could be space for improvement in the future. Improving kernel functions or restructuring model operations could increase overall performance.
-
-  
-
-</details>
-
-  
 
 ## Contributors
 
-  
 
-| Member A  | Member B | Member C |
-| ---------------- | --------------------- | --------------------- |
-| Tagging  | Sophia Optimizer  | Synthetic Data  |
-| Layer Unfreeze | Hyperparameter Tuning | |
-| Classifier Model | Repository  | |
-
-
-  
-
-## Contributing
-
-  
-
-The project involves the creation of software and documentation to be released under an open source licence.
-
-This license is the Apache License 2.0, which is a permissive licence that allows the use of the software for
-
-commercial purposes. The licence is also compatible with the licences of the libraries used in the project.
-
-  
-
-To contribute to the project, please follow the following steps:
-
-  
-
-Clone the repository to your local machine.
-
-  
-
-````sh
-
-git clone git@gitlab.gwdg.de:deep-learning-nlp/token-tricksters.git
-
-````
-
-  
-
-Add the upstream repository as a remote and disable pushing to it. This allows you to pull from the upstream repository
-
-but not push to it.
-
-  
-
-````sh
-
-git remote add upstream https://github.com/truas/minbert-default-final-project
-
-git remote set-url --push upstream DISABLE
-
-````
-
-  
-
-If you want to pull from the upstream repository you can use the following commands.
-
-  
-
-````sh
-
-git fetch upstream
-
-git merge upstream/main
-
-````
-
-  
-
-### Pre-Commit Hooks
-
-  
-
-The code quality is checked with pre-commit hooks. To install the pre-commit hooks run the following command.
-
-This is used to ensure that the code quality is consistent and that the code is formatted uniformly.
-
-  
-
-````sh
-
-pip install pre-commit
-
-pre-commit install
-
-````
-
-  
-
-This will install the pre-commit hooks in your local repository. The pre-commit hooks will run automatically before each
-
-commit. If the hooks fail the commit will be aborted. You can skip the pre-commit hooks by adding the `--no-verify` flag
-
-to your commit command.
-
-  
-
-The installed pre-commit hooks are:
-
-  
-
-- [`black`](https://github.com/psf/black) - Code formatter (Line length 100)
-
-- [`flake8`](https://github.com/PyCQA/flake8) Code linter (Selected rules)
-
-- [`isort`](https://github.com/PyCQA/isort) - Import sorter
+| Injamam  | Rehan | Saad | Reda | Smitesh |
+| ---------------- | --------------------- | --------------------- | --------------------- | --------------------- |
+| Tagging  | Sophia Optimizer  | Synthetic Data  | Synthetic Data  | Synthetic Data  |
+| Layer Unfreeze | Hyperparameter Tuning | | Synthetic Data  |
+| Classifier Model | Repository  | | Synthetic Data  |
 
   
 
 ### Grete Cluster
 
   
-
 To run the multitask classifier on the Grete cluster you can use the `run_train.sh` script. You can change the
 
 parameters in the script to your liking. To submit the script use
 
   
+for BERT
+
 
 ````sh
 
@@ -883,11 +732,19 @@ sbatch run_train.sh
 
 ````
 
+
+for BART Detection
+
   
+````sh
+
+sbatch run_bart_detection.sh
+
+````
+
 
 To check on your job you can use the following command
 
-  
 
 ```sh
 
@@ -895,80 +752,28 @@ squeue --me
 
 ```
 
-  
+The logs of your job will be saved in the `slurm_files` directory. The best model will be saved in the `models` directory.
 
-The logs of your job will be saved in the `logdir` directory. The best model will be saved in the `models` directory.
-
-  
-
-To run tensorboard on the Grete cluster you can use the following commands to create a tunnel to your local machine and
-
-start tensorboard.
-
-  
-
-````sh
-
-ssh -L localhost:16006:localhost:6006 <username>@glogin.hlrn.de
-
-module load anaconda3
-
-conda activate dnlp2
-
-tensorboard --logdir logdir
-
-````
-
-  
-
-If you want to run the model on the Grete cluster interactively you can use the following command, which will give you
-
-access to a GPU node with an A100 GPU. This is for testing purposes only and should not be used for training.
-
-  
-
-````sh
-
-srun -p grete:shared --pty -G A100:1 --interactive bash
-
-````
-
-  
 
 ## AI-Usage Card
 
-  
 
 Artificial Intelligence (AI) aided the development of this project. For transparency, we provide our [AI-Usage Card](./AI-Usage-Card.pdf/) at the top. The card is based on [https://ai-cards.org/](https://ai-cards.org/).
 
-  
 
 ## Acknowledgement
 
-  
 
 The project description, partial implementation, and scripts were adapted from the default final project for the
-
 Stanford [CS 224N class](https://web.stanford.edu/class/cs224n/) developed by Gabriel Poesia, John, Hewitt, Amelie Byun,
-
 John Cho, and their (large) team (Thank you!)
 
-  
 
 The BERT implementation part of the project was adapted from the "minbert" assignment developed at Carnegie Mellon
 
 University's [CS11-711 Advanced NLP](http://phontron.com/class/anlp2021/index.html),
 
+
 created by Shuyan Zhou, Zhengbao Jiang, Ritam Dutt, Brendon Boldt, Aditya Veerubhotla, and Graham Neubig  (Thank you!)
 
-  
-
 Parts of the code are from the [`transformers`](https://github.com/huggingface/transformers)
-
-library ([Apache License 2.0](./LICENSE)).
-
-  
-
-Parts of the scripts and code were altered by [Jan Philip Wahle](https://jpwahle.com/)
-
-and [Terry Ruas](https://terryruas.com/).

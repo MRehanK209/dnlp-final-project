@@ -38,15 +38,15 @@ Arsalane, Mohamed Reda <br/>
 
   
 
-This repository our official implementation of the Multitask BERT project for the Deep Learning for Natural Language
+This repository our official implementation of the Multitask BERT project and BART Fine Tuning for the Deep Learning for Natural Language
 
 Processing course at the University of Göttingen.
 
-  
+BERT:
 
 A pretrained
 
-BERT ([BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/abs/1810.04805))
+BART ([BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/abs/1810.04805))
 
 model was used as the basis for our experiments. The model was fine-tuned on the three tasks using a multitask learning
 

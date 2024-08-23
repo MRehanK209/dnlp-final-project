@@ -56,13 +56,20 @@ To install requirements and all dependencies using conda, run:
 
 ```sh
 
-conda env create -f environment.yml
+./setup.sh
 
 ```
 
-  
+If setting up the environment on GWDG, then run:
 
-The environment is activated with `conda activate dnlp2`.
+ ```sh
+
+./setup_gwdg.sh
+
+```
+
+The environment is activated with `conda activate dnlp`.
+
 
 Additionally, the POS and NER tags need to be downloaded. This can be done by running `python -m spacy download en_core_web_sm`.
 
@@ -77,6 +84,7 @@ The script will create a new conda environment called `dnlp2` and install all re
 ## Training
 
   
+### BERT
 
 To train the model, activate the environment and run this command:
 
@@ -115,8 +123,32 @@ important ones are:
 | `--weight_decay`  | Weight decay for optimizer.  |
 
   
+### BART Detection
 
-## Evaluation
+To fine-tune the model, activate the environment and run this command:
+
+```sh
+
+python -u multitask_classifier.py --use_gpu
+
+```
+
+or it can be run as a slurm job by submitting the `run_bart_detection.sh` file, run:
+
+```sh
+
+sbatch run_bart_detection.sh
+
+```
+| Parameter | Description  |
+| ----------------------- | ------------------------------------------------------------------------------ |
+| `--epochs`  | Number of epochs  |
+| `--lr`  | Learning rate  |
+| `--seed`  | Random Seed  |
+| `--use_gpu` | Whether to use the GPU  |
+| `--use_weight`  | Weight use with BCE Loss, it could be None, Fix or Deterministic  |
+
+## Evaluation for BERT
 
   
 
@@ -124,7 +156,11 @@ The model is evaluated after each epoch on the validation set. The results are p
 
 the `logdir` directory. The best model is saved in the `models` directory.
 
-  
+
+## Evaluation for BART Detection:
+
+The model is evaluated after each epoch on the validation set. The results are printed to the console. In BART Detection, 
+the model will run for all the epochs and return the model after training on the last epoch.
 
 ## Results
 
@@ -237,7 +273,7 @@ allows for 5 degrees of similarity.
 
   
 
-## Methodology
+## Methodologies for BERT
 
   
 

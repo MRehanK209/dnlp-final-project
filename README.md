@@ -1,4 +1,15 @@
-# DNLP SS24 Final Project
+# Group Name: Algorithmic Advancement Alliances
+
+## Group Code: G09
+## Group Repository: https://github.com/MRehanK209/dnlp-final-project
+## Tutor responsible: Yassir, Yassir
+## Grouop Leader: Injamam Karim
+## Group members:
+1. Injamam Karim
+2. Muhammad Rehan Khalid
+3. Saad Ahmad
+4. Smitesh Sorathiya
+5. Mohamed Reda Arsalane
 
 This is the starting code for the default final project for the Deep Learning for Natural Language Processing course at the University of Göttingen. You can find the handout [here](https://docs.google.com/document/d/1pZiPDbcUVhU9ODeMUI_lXZKQWSsxr7GO/edit?usp=sharing&ouid=112211987267179322743&rtpof=true&sd=true)
 

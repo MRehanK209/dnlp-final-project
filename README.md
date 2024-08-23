@@ -42,31 +42,17 @@ This repository our official implementation of the Multitask BERT project and BA
 
 Processing course at the University of Göttingen.
 
-BERT:
+BERT: ([BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/abs/1810.04805))
 
-A pretrained
+A pre-trained BART:
 
-BART ([BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/abs/1810.04805))
+The BART model was used as the basis for our experiments for PTD and PTG tasks. The model was fine-tuned separately for the datasets of PTG and PTD tasks.
 
-model was used as the basis for our experiments. The model was fine-tuned on the three tasks using a multitask learning
-
-approach. The model was trained on the three tasks simultaneously, with a single shared BERT encoder and three separate
-
-task-specific classifiers.
-
-  
-
-<div align="center"><img src="https://cdn.discordapp.com/attachments/702823579405778954/1147942221530812456/image.png" alt="Hyperparameter Search to find a baseline" width="600"/></div>
-
-  
 
 ## Requirements
 
-  
-
 To install requirements and all dependencies using conda, run:
 
-  
 
 ```sh
 

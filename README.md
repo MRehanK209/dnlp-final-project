@@ -1,9 +1,13 @@
 # Group Name: Algorithmic Advancement Alliances
 
-## Group Code: G09
-## Group Repository: https://github.com/MRehanK209/dnlp-final-project
-## Tutor responsible: Yassir, Yassir
-## Grouop Leader: Injamam Karim
+## Group Code: 
+G09
+## Group Repository: 
+https://github.com/MRehanK209/dnlp-final-project
+## Tutor responsible: 
+Yassir, Yassir
+## Grouop Leader: 
+Injamam Karim
 ## Group members:
 1. Injamam Karim
 2. Muhammad Rehan Khalid

@@ -73,6 +73,7 @@ def convert_labels_to_binary(paraphrase_types, num_labels=7):
     return binary_labels
 
 def smoothness_inducing_loss(model, inputs, labels, criterion, epsilon=1e-6, lambda_reg=0.01):
+    
     # Get the input embeddings from the BART model
     input_embeddings = model.bart.encoder.embed_tokens(inputs['input_ids'])
     
@@ -92,7 +93,6 @@ def smoothness_inducing_loss(model, inputs, labels, criterion, epsilon=1e-6, lam
     perturbed_output = model.classifier(perturbed_output.last_hidden_state[:, 0, :])
     perturbed_output = model.sigmoid(perturbed_output)
 
-    # Calculate the original loss
     original_loss = criterion(original_output, labels.float())
     
     # Calculate the smoothness regularization term (L2 norm)
@@ -102,8 +102,6 @@ def smoothness_inducing_loss(model, inputs, labels, criterion, epsilon=1e-6, lam
     total_loss = original_loss + lambda_reg * smoothness_loss
     
     return total_loss
-
-
 
 def bregman_proximal_point_update(optimizer, model, original_params, eta=1e-5):
 
@@ -177,20 +175,11 @@ def train_model(model, train_data, dev_data,weight_tensor, device, args):
             input_ids, attention_mask, labels = [b.to(device) for b in batch]
             optimizer.zero_grad()
 
-            # Store original parameters before update
             original_params = [param.clone() for param in model.parameters()]
-
-            # Prepare inputs for the model
             inputs = {'input_ids': input_ids, 'attention_mask': attention_mask}
-
-            # Apply smoothness-inducing loss
             loss = smoothness_inducing_loss(model, inputs, labels, criterion)
             loss.backward()
-
-            # Perform the optimization step
             optimizer.step()
-
-            # Apply the Bregman proximal point update
             bregman_proximal_point_update(optimizer, model, original_params, eta=eta)
 
             total_loss += loss.item()

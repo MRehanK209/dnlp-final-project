@@ -6,7 +6,6 @@ import re
 import sys
 import time
 from types import SimpleNamespace
-
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -25,6 +24,11 @@ from optimizer import AdamW
 
 TQDM_DISABLE = True
 
+
+import nltk
+from nltk.corpus import wordnet
+nltk.download('wordnet')
+nltk.download('omw-1.4')
 
 # fix the random seed
 def seed_everything(seed=11711):
@@ -156,14 +160,73 @@ def save_model(model, optimizer, args, config, filepath):
     print(f"Saving the model to {filepath}.")
 
 
+def synonym_replacement(sentence, n=3):
+    """
+    Replace up to `n` words in the sentence with their synonyms.
+    """
+    words = sentence.split()
+    new_words = words.copy()
+
+    for _ in range(n):
+        word = random.choice(words)
+        synonyms = wordnet.synsets(word)
+        if synonyms:
+            synonym = random.choice(synonyms).lemmas()[0].name()
+            if synonym != word:
+                # Replace word in sentence with its synonym
+                new_words = [synonym if w == word else w for w in new_words]
+
+    return ' '.join(new_words)
+
+
+def augment_sst_data(sst_data, percentage=0.3):
+    """
+    Augments the SST data by applying synonym replacement to a percentage of the sentences.
+    """
+    num_sentences = len(sst_data)
+    num_to_augment = int(percentage * num_sentences)
+    indices_to_augment = random.sample(range(num_sentences), num_to_augment)
+
+    # Create a new list to hold the augmented data
+    augmented_data = []
+
+    for idx in indices_to_augment:
+        # Ensure we are working with a dictionary and access 'sentence' correctly
+        if isinstance(sst_data[idx], dict):
+            sentence = sst_data[idx]['sentence']
+            # Apply synonym replacement to the sentence
+            augmented_sentence = synonym_replacement(sentence)
+            # Update the sentence in the dictionary
+            augmented_data.append({
+                'id': sst_data[idx]['id'],
+                'sentence': augmented_sentence,
+                'sentiment': sst_data[idx]['sentiment']
+            })
+
+    # Add the augmented data to the original data
+    sst_data.extend(augmented_data)
+
+    return sst_data
+
 # TODO Currently only trains on SST dataset!
 def train_multitask(args):
-    device = torch.device("cuda") if args.use_gpu else torch.device("cpu")
+    #device = torch.device("cuda") if args.use_gpu else torch.device("cpu")
     # Load data
     # Create the data and its corresponding datasets and dataloader:
+
+    #sst_train_data, _, quora_train_data, sts_train_data, etpc_train_data = load_multitask_data(
+    #    args.sst_train, args.quora_train, args.sts_train, args.etpc_train, split="train"
+    #)
+
+    device = torch.device("cuda") if args.use_gpu else torch.device("cpu")
+    # Load data
     sst_train_data, _, quora_train_data, sts_train_data, etpc_train_data = load_multitask_data(
         args.sst_train, args.quora_train, args.sts_train, args.etpc_train, split="train"
     )
+    # Apply synonym replacement to 30% of SST data
+    if args.task == "sst" or args.task == "multitask":
+        sst_train_data = augment_sst_data(sst_train_data, percentage=0.3)
+
     sst_dev_data, _, quora_dev_data, sts_dev_data, etpc_dev_data = load_multitask_data(
         args.sst_dev, args.quora_dev, args.sts_dev, args.etpc_dev, split="train"
     )
@@ -179,8 +242,8 @@ def train_multitask(args):
 
     # SST dataset
     if args.task == "sst" or args.task == "multitask":
-        #sst_train_data = sst_train_data[:1000]
-        #sst_dev_data = sst_dev_data[:1000]
+        #sst_train_data = sst_train_data[:100]
+        #sst_dev_data = sst_dev_data[:100]
 
         sst_train_data = SentenceClassificationDataset(sst_train_data, args)
         sst_dev_data = SentenceClassificationDataset(sst_dev_data, args)
@@ -198,8 +261,8 @@ def train_multitask(args):
             collate_fn=sst_dev_data.collate_fn,
         )
     if args.task == "sts" or args.task == "multitask":
-        sts_train_data = sts_train_data[:500]
-        sts_dev_data = sts_dev_data[:500]
+        #sts_train_data = sts_train_data[:500]
+        #sts_dev_data = sts_dev_data[:500]
 
         sts_train_data = SentencePairDataset(sts_train_data, args)
         sts_dev_data = SentencePairDataset(sts_dev_data, args)
@@ -218,8 +281,8 @@ def train_multitask(args):
         )
 
     if args.task == "qqp" or args.task == "multitask":
-        sts_train_data = quora_train_data[:100]
-        sts_dev_data = quora_dev_data[:100]
+        #sts_train_data = quora_train_data[:100]
+        #sts_dev_data = quora_dev_data[:100]
         paraphrase_train_data = SentencePairDataset(quora_train_data, args)
         paraphrase_dev_data = SentencePairDataset(quora_dev_data, args)
 
@@ -551,7 +614,7 @@ def get_args():
     )
 
     # Hyperparameters
-    parser.add_argument("--batch_size", help="sst: 64 can fit a 12GB GPU", type=int, default=64)
+    parser.add_argument("--batch_size", help="sst: 64 can fit a 12GB GPU", type=int, default=32)
     parser.add_argument("--hidden_dropout_prob", type=float, default=0.3)
     parser.add_argument(
         "--lr",

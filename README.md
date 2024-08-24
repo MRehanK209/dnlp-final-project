@@ -263,7 +263,7 @@ Smart regularization is an advanced technique designed to improve the generaliza
 
 The goal of smoothness-inducing loss is to make the model’s predictions stable and consistent, even when small perturbations are applied to the input data. This encourages the model to learn robust features that do not change drastically due to minor variations in input.
 
-####### Components:
+Components:
 
 1. **Perturbation with Noise:** Small Gaussian noise is added to the input embeddings, which creates a perturbed version of the inputs. This simulates slight variations in data, helping the model become insensitive to minor changes.
 2. **Smoothness Loss:** This is calculated as the L2 norm of the difference between the outputs from the original and perturbed inputs. It penalizes large deviations in model predictions caused by small input changes, enforcing stability.
@@ -272,7 +272,7 @@ The goal of smoothness-inducing loss is to make the model’s predictions stable
 ###### Bregman Proximal Point Update
 This method is used to stabilize the training process by applying a Bregman divergence-based constraint on the model parameters. It helps maintain a balance between the updated parameters and the original parameters after each optimization step.
 
-####### Components:
+Components:
 
 1. **Original Parameters:** Before updating the model’s parameters, a copy of the current parameters is saved as original_params.
 2. **Proximal Update:** After the standard optimization step (e.g., gradient descent), the Bregman proximal point update is applied. It adjusts the parameters by pulling them closer to the original parameters using a small step size (eta). This serves as a regularization mechanism that prevents the model from diverging too much from the current solution, ensuring more stable and consistent updates.
@@ -289,25 +289,55 @@ This technique is adapted from Jiang et al., 2020 ([SMART: Robust and Efficient 
 | `--use_gpu` | Whether to use the GPU  |
 | `--use_weight`  | Weight use with BCE Loss, it could be None, Fix or Deterministic  |
 
-### Experiments
+### Experiment Details
 
-The following table summarizes the key hyperparameters, results, and insights from each experiment:
+In this study, we conducted a series of experiments to evaluate the effectiveness of Smart regularization strategy, loss functions, and weight assignment methods on the model's performance, measured by the Matthews Correlation Coefficient (MCC) after 10 epochs. The experiments were designed to explore the impact of the SMART regularization technique, different weighting schemes, and loss functions on the model's ability to generalize.
 
-### Detailed Results Analysis
+#### Experiment Configurations
 
-1. **Experiment 1**: Established a baseline with a moderate learning rate and low contrastive loss. The model achieved a good BLEU score but with limited diversity.
-2. **Experiment 2**: Reduced the contrastive loss weight, leading to better BLEU scores but only slight improvements in diversity.
-3. **Experiment 3**: Tested dynamic learning rate adjustment with ReduceOnPlateau, but results were less impactful in improving diversity.
-4. **Experiment 4**: Lowered the number of beams and diversity penalty, focusing on more accurate but less diverse outputs.
-5. **Experiment 5**: Introduced warmup scheduling with increased diversity, leading to a more balanced outcome in both accuracy and diversity.
-6. **Experiment 6**: Pushed for higher diversity with an increased contrastive loss and diversity penalty, but the BLEU score dropped significantly.
-7. **Experiment 7**: Further increased the contrastive loss to maximize diversity, leading to a notable drop in accuracy.
-8. **Experiment 8**: Combined warmup scheduling with a moderate contrastive loss, yielding the highest Penalized BLEU score by effectively balancing accuracy and diversity.
-9. **Experiment 9**: Fine-tuned the parameters to find the best balance between accuracy and diversity, achieving strong BLEU and Penalized BLEU scores.
+1. **SMART Regularization:**
+   - **Yes:** Indicates that SMART regularization was applied during training. SMART is designed to improve model robustness by inducing smoothness in the loss function.
+   - **No:** Indicates that SMART regularization was not applied.
+
+2. **Weight:**
+   - **None:** No additional weighting was applied to the loss function.
+   - **Deterministic:** A deterministic weighting scheme was applied, based on the class distribution.
+   - **Fixed:** A fixed weighting scheme was applied, where the weights are constant throughout the training.
+
+3. **Loss Function:**
+   - **BCE:** Binary Cross-Entropy loss, a standard loss function for binary classification tasks.
+   - **Focal:** Focal loss, designed to address class imbalance by focusing more on hard-to-classify samples.
+
+### Results Summary
+
+| **SMART** | **Weight**      | **Loss** | **MCC Value** |
+|-----------|-----------------|----------|---------------|
+| No        | None            | BCE      | 0.131         |
+| No        | Deterministic   | BCE      | 0.1424        |
+| No        | Fixed           | BCE      | 0.1515        |
+| **Yes**       | **None**            | **BCE**      | **0.18  **        |
+| Yes       | Deterministic   | BCE      | 0.1212        |
+| Yes       | Fixed           | BCE      | 0.1244        |
+| No        | None            | Focal    | 0.1514        |
+| Yes       | None            | Focal    | 0.155         |
+
+### Key Observations
+
+1. **SMART Regularization Impact:**
+   - Applying SMART regularization with no weighting (`Weight = None`) and using Binary Cross-Entropy (BCE) as the loss function resulted in the highest MCC value of 0.18, indicating that the SMART technique significantly improved model performance without additional weighting.
+   - However, when deterministic or fixed weights were combined with SMART, the MCC values decreased, It suggests that SMART may be more effective without additional weighting mechanisms.
+
+2. **Loss Function Comparison:**
+   - The Focal loss function generally performed better than BCE in scenarios without SMART regularization, particularly with no weights (`Weight = None`).
+   - With SMART regularization, BCE still slightly outperformed Focal loss.
+
+3. **Weighting Schemes:**
+   - The Fixed weighting scheme provided the best MCC value among experiments without SMART regularization, indicating that it helps in scenarios where SMART is not used.
+   - Interestingly, the deterministic and fixed weights negatively impacted the MCC when SMART was applied, highlighting the importance of selecting the right combination of regularization and weighting strategies.
 
 ### Conclusion
+The experiments demonstrate that SMART regularization combined with no additional weighting yields the best performance with Binary Cross-Entropy loss. However, the combination of regularization techniques, loss functions, and weighting strategies requires careful consideration to achieve optimal results.
 
-The experiments showed that balancing accuracy and diversity in paraphrase generation requires careful tuning of hyperparameters. The best results were achieved with a moderate learning rate, a carefully adjusted contrastive loss weight, and a warmup scheduler. Future work could further refine these parameters and explore additional data augmentation techniques to improve diversity without compromising accuracy.
 
 ## Evaluation for BERT
 

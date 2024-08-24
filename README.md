@@ -315,7 +315,7 @@ In this study, we conducted a series of experiments to evaluate the effectivenes
 | No        | None            | BCE      | 0.131         |
 | No        | Deterministic   | BCE      | 0.1424        |
 | No        | Fixed           | BCE      | 0.1515        |
-| **Yes**       | **None**            | **BCE**      | **0.18  **        |
+| **Yes**       | **None**            | **BCE**      | **0.18**        |
 | Yes       | Deterministic   | BCE      | 0.1212        |
 | Yes       | Fixed           | BCE      | 0.1244        |
 | No        | None            | Focal    | 0.1514        |

@@ -51,7 +51,7 @@ The BART model was used as the basis for our experiments for PTD and PTG tasks. 
 
 ## Requirements
 
-To install requirements and all dependencies using conda, run:
+To install requirements and all dependencies and create the environment:
 
 
 ```sh
@@ -79,12 +79,9 @@ Alternatively, use the provided script `setup.sh`.
 
 The script will create a new conda environment called `dnlp2` and install all required packages.
 
-  
-
-## Training
 
   
-### BERT
+## BERT
 
 To train the model, activate the environment and run this command:
 
@@ -122,24 +119,168 @@ important ones are:
 | `--use_gpu` | Whether to use the GPU.  |
 | `--weight_decay`  | Weight decay for optimizer.  |
 
+
+## BART - Paraphrase Type Generation
+
+### Introduction
+
+This project focuses on improving a BART-based model for paraphrase generation. The goal is to balance accuracy (measured by the BLEU score) and diversity (measured by the Negative BLEU score) of the generated paraphrases. We tuned various hyperparameters to achieve this balance, and the results of our experiments are summarized in this document.
+
+### Setup Instructions
+
+To set up the environment and run the model, follow these steps:
+
+1. Run `./setup_gwdg_bart_generation.sh` to set up the environment.
+2. Use `sbatch run_train_bart_generation.sh` on the GWDG cluster to start model training via Slurm.
+3. Monitor the progress using slurm files in slurm_folder.
+   
+All necessary libraries are listed in the setup script. The project is designed to run on a GPU-enabled environment with CUDA support for faster processing.
+
+### Data
+
+The data required for this project is stored in the `data` folder. The datasets used are:
+
+1. `processed_etpc_paraphrase_train.csv`: Training data.
+2. `processed_etpc_paraphrase_dev.csv`: Validation data.
+3. `etpc-paraphrase-generation-test-student.csv`: Test data.
+
+Model predictions are saved in the `predictions` folder.
+
+### Methodology
+
+This project uses a BART model from HuggingFace’s Transformers library for paraphrase generation. We augmented the data by replacing words with synonyms to increase the diversity of the training data. The model combines standard loss with contrastive loss to penalize paraphrases that are too similar to the input. We also implemented early stopping and learning rate scheduling to improve training efficiency.
+
+### Hyperparameter Tuning Summary
+
+| Hyperparameter                | Description                                                                                   |
+|-------------------------------|-----------------------------------------------------------------------------------------------|
+| `--epochs`                    | Number of training epochs. Determines how many times the model sees the entire training data. |
+| `--lr`                        | Learning rate. Controls how quickly the model updates during training.                        |
+| `--scheduler_type`            | Type of learning rate scheduler. Options: `cosine`, `reduce_on_plateau`, `warmup`.            |
+| `--contrastive_weight`        | Weight for the contrastive loss. Balances accuracy and diversity of generated paraphrases.     |
+| `--early_stopping_patience`   | Number of epochs to wait before stopping if no improvement is seen. Prevents overfitting.  |
+| `--num_beams`                 | Number of beams used in beam search. Higher values can improve output quality.                |
+| `--num_beam_groups`           | Number of groups for diverse beam search. Increases output diversity.                         |
+| `--diversity_penalty`         | Penalty to encourage diversity in beam search. Higher values lead to more diverse paraphrases.|
+| `--augment_factor`            | Amount of data augmentation through synonym replacement.                                      |
+| `--use_gpu`                   | Whether to use GPU for training.                                                              |
+| `--seed`                      | Random seed for reproducibility.                                                              |
+
+### Experiments
+
+The following table summarizes the key hyperparameters, results, and insights from each experiment:
+
+| Experiment | Epochs | Learning Rate | Contrastive Loss Weight | Scheduler Type   | Beam Search (num_beams, num_beam_groups, diversity_penalty)        | BLEU Score | Penalized BLEU Score |
+|------------|--------|---------------|--------------------------|------------------|---------------------------------------------------------------------|------------|-----------------------|
+| 1          | 5      | 5e-5          | 0.1                      | Cosine           | num_beams=6, num_beam_groups=2, diversity_penalty=1.0               | 45.1888    | 13.306                |
+| 2          | 10     | 3e-5          | 0.05                     | Cosine           | num_beams=5, num_beam_groups=2, diversity_penalty=0.8               | 46.1133    | 11.234                |
+| 3          | 10     | 3e-5          | 0.1                      | ReduceOnPlateau  | num_beams=6, num_beam_groups=2, diversity_penalty=1.0               | 45.9262    | 10.647                |
+| 4          | 10     | 5e-5          | 0.05                     | Cosine           | num_beams=4, num_beam_groups=2, diversity_penalty=0.7               | 46.2459    | 12.792                |
+| 5          | 10     | 5e-5          | 0.1                      | Warmup           | num_beams=6, num_beam_groups=3, diversity_penalty=1.2               | 46.3249    | 14.087                |
+| 6          | 15     | 5e-5          | 0.3                      | Cosine           | num_beams=6, num_beam_groups=2, diversity_penalty=1.5               | 45.9954    | 3.278                 |
+| 7          | 15     | 2e-5          | 0.4                      | Cosine           | num_beams=6, num_beam_groups=2, diversity_penalty=1.0               | 40.6632    | 22.401                |
+| 8          | 15     | 5e-5          | 0.3                      | Warmup           | num_beams=6, num_beam_groups=2, diversity_penalty=1.3               | 38.5582    | 24.192                |
+| 9          | 15     | 3e-5          | 0.25                     | Warmup           | num_beams=6, num_beam_groups=2, diversity_penalty=1.3               | 42.3426    | 20.097                |
+
+### Detailed Results Analysis
+
+1. **Experiment 1**: Established a baseline with a moderate learning rate and low contrastive loss. The model achieved a good BLEU score but with limited diversity.
+2. **Experiment 2**: Reduced the contrastive loss weight, leading to better BLEU scores but only slight improvements in diversity.
+3. **Experiment 3**: Tested dynamic learning rate adjustment with ReduceOnPlateau, but results were less impactful in improving diversity.
+4. **Experiment 4**: Lowered the number of beams and diversity penalty, focusing on more accurate but less diverse outputs.
+5. **Experiment 5**: Introduced warmup scheduling with increased diversity, leading to a more balanced outcome in both accuracy and diversity.
+6. **Experiment 6**: Pushed for higher diversity with an increased contrastive loss and diversity penalty, but the BLEU score dropped significantly.
+7. **Experiment 7**: Further increased the contrastive loss to maximize diversity, leading to a notable drop in accuracy.
+8. **Experiment 8**: Combined warmup scheduling with a moderate contrastive loss, yielding the highest Penalized BLEU score by effectively balancing accuracy and diversity.
+9. **Experiment 9**: Fine-tuned the parameters to find the best balance between accuracy and diversity, achieving strong BLEU and Penalized BLEU scores.
+
+### Conclusion
+
+The experiments showed that balancing accuracy and diversity in paraphrase generation requires careful tuning of hyperparameters. The best results were achieved with a moderate learning rate, a carefully adjusted contrastive loss weight, and a warmup scheduler. Future work could further refine these parameters and explore additional data augmentation techniques to improve diversity without compromising accuracy.
   
-### BART Detection
+## BART - Paraphrase Type Detection
 
-To fine-tune the model, activate the environment and run this command:
+### Introduction
 
-```sh
+This project focuses on improving a BART-based model for paraphrase type detection. The goal is to fine-tune the BART model to improve the performance of the validation data.
+For evaluation Accuracy was used, but models mostly collapsed due to the bad metrics used and the imbalance of multiclass labels in the dataset. Finally ** Matthews Correlation Coefficient** will 
+used for evaluation per paraphrase class.
 
-python -u multitask_classifier.py --use_gpu
+### Setup Instructions
 
-```
+To set up the environment and run the model, follow these steps:
 
-or it can be run as a slurm job by submitting the `run_bart_detection.sh` file, run:
+1. Run `./setup_gwdg.sh` to set up the environment.
+2. Use `sbatch run_bart_detection.sh` on the GWDG cluster to start model training via Slurm.
+3. Monitor the progress using slurm files in slurm_folder.
+   
+All necessary libraries are listed in the setup script. The project is designed to run on a GPU-enabled environment with CUDA support for faster processing.
 
-```sh
+### Data
 
-sbatch run_bart_detection.sh
+The data required for this project is stored in the `data` folder. The datasets used are:
 
-```
+1. `etpc_paraphrase_train.csv`: Training data.
+2. `etpc_paraphrase_dev.csv`: Validation data.
+3. `etpc-paraphrase-detection-test-student.csv`: Test data.
+
+### Methodology
+
+This project uses a BART model from HuggingFace’s Transformers library for paraphrase type detection. 
+
+#### Baseline
+
+For the Baseline, I have used the BCELoss function, Since the BART class was returning the probabilities. I have trained the model for 10 epochs.
+
+#### Improvements
+
+##### Weights With BCELoss:
+  The idea is to penalize the majority classes and putt more weight on the minority classes. I have defined the Weights in 3 categories
+
+| Category | Description  |
+| ----------------------- | ------------------------------------------------------------------------------ |
+| `None`  | With this argument no weight will be used.  |
+| `Fixed`  | With this argument we used the fixed weight for each class that we define in the code.  |
+| `Deterministic`  | With this argument, weight is calculated from the data.  |
+  
+##### Focal Loss
+
+In many real-world applications of deep learning, there is often a significant class imbalance in the dataset. For example, in the case of detecting rare objects in images, the number of background examples greatly outnumbers the positive examples. Traditional loss functions like cross-entropy are not well-suited for these scenarios because they tend to be overwhelmed by the numerous easy examples, causing the model to underperform on minority examples. That's why I chose this loss function since in the Type Detection case our   data is imbalanced.
+
+Focal Loss was introduced to address the imbalance challenge by focusing the learning on hard examples while down-weighting the contribution of easy examples. This is achieved by modulating the standard cross-entropy loss with a factor `(1 - pt)^gamma`, where `pt` is the model's estimated probability for the true class. When the model is confident about the prediction (i.e., `pt` is high), the factor is small, reducing the loss contribution from easy examples. Conversely, when the model struggles (i.e., `pt` is low), the factor is large, increasing the loss contribution and encouraging the model to focus on these harder examples.
+
+###### Parameters
+
+`alpha`: is a weighting factor that balances the importance between classes, especially in imbalanced datasets. It helps prevent the model from being biased toward the majority class by assigning a higher weight to the minority class
+
+`gamma`: adjusts the loss contribution from easy examples by reducing their impact, focusing learning on harder examples. A higher `gamma` places more emphasis on difficult-to-classify cases, making the model prioritize them during training.
+
+##### SMART Regularization
+
+Smart regularization is an advanced technique designed to improve the generalization of deep learning models by adding constraints or modifications to the loss function. This approach helps the model learn smoother, more stable representations that are less likely to overfit the training data. It has two components.
+
+###### Smoothness-Inducing Loss
+
+The goal of smoothness-inducing loss is to make the model’s predictions stable and consistent, even when small perturbations are applied to the input data. This encourages the model to learn robust features that do not change drastically due to minor variations in input.
+
+####### Components:
+
+1. **Perturbation with Noise:** Small Gaussian noise is added to the input embeddings, which creates a perturbed version of the inputs. This simulates slight variations in data, helping the model become insensitive to minor changes.
+2. **Smoothness Loss:** This is calculated as the L2 norm of the difference between the outputs from the original and perturbed inputs. It penalizes large deviations in model predictions caused by small input changes, enforcing stability.
+3. **Total Loss:** The final loss combines the original BCELoss with the smoothness loss, weighted by a regularization parameter (lambda_reg). This ensures that the model not only learns to minimize the loss but also maintains smoothness.
+
+###### Bregman Proximal Point Update
+This method is used to stabilize the training process by applying a Bregman divergence-based constraint on the model parameters. It helps maintain a balance between the updated parameters and the original parameters after each optimization step.
+
+####### Components:
+
+1. **Original Parameters:** Before updating the model’s parameters, a copy of the current parameters is saved as original_params.
+2. **Proximal Update:** After the standard optimization step (e.g., gradient descent), the Bregman proximal point update is applied. It adjusts the parameters by pulling them closer to the original parameters using a small step size (eta). This serves as a regularization mechanism that prevents the model from diverging too much from the current solution, ensuring more stable and consistent updates.
+
+This technique is adapted from Jiang et al., 2020 ([SMART: Robust and Efficient Fine-Tuning for Pre-trained Natural Language Models through Principled Regularized Optimization](https://aclanthology.org/2020.acl-main.197) (Jiang et al., ACL 2020))
+
+### Hyperparameter Tuning Summary
+
 | Parameter | Description  |
 | ----------------------- | ------------------------------------------------------------------------------ |
 | `--epochs`  | Number of epochs  |
@@ -147,6 +288,26 @@ sbatch run_bart_detection.sh
 | `--seed`  | Random Seed  |
 | `--use_gpu` | Whether to use the GPU  |
 | `--use_weight`  | Weight use with BCE Loss, it could be None, Fix or Deterministic  |
+
+### Experiments
+
+The following table summarizes the key hyperparameters, results, and insights from each experiment:
+
+### Detailed Results Analysis
+
+1. **Experiment 1**: Established a baseline with a moderate learning rate and low contrastive loss. The model achieved a good BLEU score but with limited diversity.
+2. **Experiment 2**: Reduced the contrastive loss weight, leading to better BLEU scores but only slight improvements in diversity.
+3. **Experiment 3**: Tested dynamic learning rate adjustment with ReduceOnPlateau, but results were less impactful in improving diversity.
+4. **Experiment 4**: Lowered the number of beams and diversity penalty, focusing on more accurate but less diverse outputs.
+5. **Experiment 5**: Introduced warmup scheduling with increased diversity, leading to a more balanced outcome in both accuracy and diversity.
+6. **Experiment 6**: Pushed for higher diversity with an increased contrastive loss and diversity penalty, but the BLEU score dropped significantly.
+7. **Experiment 7**: Further increased the contrastive loss to maximize diversity, leading to a notable drop in accuracy.
+8. **Experiment 8**: Combined warmup scheduling with a moderate contrastive loss, yielding the highest Penalized BLEU score by effectively balancing accuracy and diversity.
+9. **Experiment 9**: Fine-tuned the parameters to find the best balance between accuracy and diversity, achieving strong BLEU and Penalized BLEU scores.
+
+### Conclusion
+
+The experiments showed that balancing accuracy and diversity in paraphrase generation requires careful tuning of hyperparameters. The best results were achieved with a moderate learning rate, a carefully adjusted contrastive loss weight, and a warmup scheduler. Future work could further refine these parameters and explore additional data augmentation techniques to improve diversity without compromising accuracy.
 
 ## Evaluation for BERT
 

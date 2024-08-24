@@ -1,6 +1,8 @@
-# DNLP SS23 Final Project - Multitask BERT and BART for PTD and PTG
+# DNLP SS23 Final Project - Multitask BERT and BART Fintune
 
   
+### Group Tutor 
+Yassir, Yassir
 
 <div align="left">
 
@@ -132,8 +134,7 @@ To set up the environment and run the model, follow these steps:
 
 1. Run `./setup_gwdg_bart_generation.sh` to set up the environment.
 2. Use `sbatch run_train_bart_generation.sh` on the GWDG cluster to start model training via Slurm.
-3. Monitor the progress using slurm files in slurm_folder.
-   
+
 All necessary libraries are listed in the setup script. The project is designed to run on a GPU-enabled environment with CUDA support for faster processing.
 
 ### Data
@@ -148,23 +149,31 @@ Model predictions are saved in the `predictions` folder.
 
 ### Methodology
 
-This project uses a BART model from HuggingFace’s Transformers library for paraphrase generation. We augmented the data by replacing words with synonyms to increase the diversity of the training data. The model combines standard loss with contrastive loss to penalize paraphrases that are too similar to the input. We also implemented early stopping and learning rate scheduling to improve training efficiency.
+This project uses a BART model from HuggingFace’s Transformers library for paraphrase generation. We augmented the data by replacing words with synonyms to increase the diversity of the training data. The model combines standard loss with contrastive loss to penalize paraphrases that are too similar to the input. We also implemented early stopping and learning rate scheduling to improve training efficiency. Throughout the experiments, weight decay was consistently set to 0.005 to prevent overfitting, which helped maintain a balance between model complexity and generalization.
+
+#### Penalized BLEU Score Calculation
+
+The Penalized BLEU score is calculated by combining the standard BLEU score with the Negative BLEU score, which measures diversity. The formula used is: 
+
+**Penalized BLEU Score = (BLEU Score * Negative BLEU Score) / 52**
+
+This formula balances the trade-off between generating accurate and diverse paraphrases, aiming for a model that can produce outputs that are both semantically correct and sufficiently varied.
 
 ### Hyperparameter Tuning Summary
 
-| Hyperparameter                | Description                                                                                   |
-|-------------------------------|-----------------------------------------------------------------------------------------------|
-| `--epochs`                    | Number of training epochs. Determines how many times the model sees the entire training data. |
-| `--lr`                        | Learning rate. Controls how quickly the model updates during training.                        |
-| `--scheduler_type`            | Type of learning rate scheduler. Options: `cosine`, `reduce_on_plateau`, `warmup`.            |
-| `--contrastive_weight`        | Weight for the contrastive loss. Balances accuracy and diversity of generated paraphrases.     |
-| `--early_stopping_patience`   | Number of epochs to wait before stopping if no improvement is seen. Prevents overfitting.  |
-| `--num_beams`                 | Number of beams used in beam search. Higher values can improve output quality.                |
-| `--num_beam_groups`           | Number of groups for diverse beam search. Increases output diversity.                         |
-| `--diversity_penalty`         | Penalty to encourage diversity in beam search. Higher values lead to more diverse paraphrases.|
-| `--augment_factor`            | Amount of data augmentation through synonym replacement.                                      |
-| `--use_gpu`                   | Whether to use GPU for training.                                                              |
-| `--seed`                      | Random seed for reproducibility.                                                              |
+| Hyperparameter                        | Description                                                                                   |
+|---------------------------------------|-----------------------------------------------------------------------------------------------|
+| `--epochs`                            | Number of training epochs. Determines how many times the model sees the entire training data. |
+| `--lr`                                | Learning rate. Controls how quickly the model updates during training.                        |
+| `--scheduler_type`                    | Type of learning rate scheduler. Options: `cosine`, `reduce_on_plateau`, `warmup`.            |
+| `--contrastive_weight`                | Weight for the contrastive loss. Balances accuracy and diversity of generated paraphrases.     |
+| `--early_stopping_patience`           | Number of epochs to wait before stopping if no improvement is seen. Prevents overfitting.     |
+| `--num_beams`                         | Number of beams used in beam search. Higher values can improve output quality.                |
+| `--num_beam_groups`                   | Number of groups for diverse beam search. Increases output diversity.                         |
+| `--diversity_penalty`                 | Penalty to encourage diversity in beam search. Higher values lead to more diverse paraphrases.|
+| `--augment_factor`                    | Amount of data augmentation through synonym replacement.                                      |
+| `--use_gpu`                           | Whether to use GPU for training.                                                              |
+| `--seed`                              | Random seed for reproducibility.                                                              |
 
 ### Experiments
 
@@ -172,31 +181,84 @@ The following table summarizes the key hyperparameters, results, and insights fr
 
 | Experiment | Epochs | Learning Rate | Contrastive Loss Weight | Scheduler Type   | Beam Search (num_beams, num_beam_groups, diversity_penalty)        | BLEU Score | Penalized BLEU Score |
 |------------|--------|---------------|--------------------------|------------------|---------------------------------------------------------------------|------------|-----------------------|
+| Baseline   | 3      | 5e-5          | N/A                      | None             | None                                                                | 46.6373    | 3.541                 |
 | 1          | 5      | 5e-5          | 0.1                      | Cosine           | num_beams=6, num_beam_groups=2, diversity_penalty=1.0               | 45.1888    | 13.306                |
 | 2          | 10     | 3e-5          | 0.05                     | Cosine           | num_beams=5, num_beam_groups=2, diversity_penalty=0.8               | 46.1133    | 11.234                |
 | 3          | 10     | 3e-5          | 0.1                      | ReduceOnPlateau  | num_beams=6, num_beam_groups=2, diversity_penalty=1.0               | 45.9262    | 10.647                |
-| 4          | 10     | 5e-5          | 0.05                     | Cosine           | num_beams=4, num_beam_groups=2, diversity_penalty=0.7               | 46.2459    | 12.792                |
+| 4          | 5      | 5e-5          | 0.05                     | Cosine           | num_beams=4, num_beam_groups=2, diversity_penalty=0.7               | 46.2459    | 12.792                |
 | 5          | 10     | 5e-5          | 0.1                      | Warmup           | num_beams=6, num_beam_groups=3, diversity_penalty=1.2               | 46.3249    | 14.087                |
-| 6          | 15     | 5e-5          | 0.3                      | Cosine           | num_beams=6, num_beam_groups=2, diversity_penalty=1.5               | 45.9954    | 3.278                 |
-| 7          | 15     | 2e-5          | 0.4                      | Cosine           | num_beams=6, num_beam_groups=2, diversity_penalty=1.0               | 40.6632    | 22.401                |
-| 8          | 15     | 5e-5          | 0.3                      | Warmup           | num_beams=6, num_beam_groups=2, diversity_penalty=1.3               | 38.5582    | 24.192                |
-| 9          | 15     | 3e-5          | 0.25                     | Warmup           | num_beams=6, num_beam_groups=2, diversity_penalty=1.3               | 42.3426    | 20.097                |
+| 6          | 12     | 2e-5          | 0.4                      | Cosine           | num_beams=6, num_beam_groups=2, diversity_penalty=1.0               | 40.6632    | 22.401                |
+| 7          | 15     | 5e-5          | 0.3                      | Warmup           | num_beams=6, num_beam_groups=2, diversity_penalty=1.3               | 38.5582    | 24.192                |
+| 8          | 15     | 3e-5          | 0.25                     | Warmup           | num_beams=6, num_beam_groups=2, diversity_penalty=1.3               | 42.3426    | 20.097                |
+| 9          | 19     | 3e-5          | 0.3                      | Warmup           | num_beams=6, num_beam_groups=2, diversity_penalty=1.0               | 41.6671    | 22.820                |
 
 ### Detailed Results Analysis
 
-1. **Experiment 1**: Established a baseline with a moderate learning rate and low contrastive loss. The model achieved a good BLEU score but with limited diversity.
-2. **Experiment 2**: Reduced the contrastive loss weight, leading to better BLEU scores but only slight improvements in diversity.
-3. **Experiment 3**: Tested dynamic learning rate adjustment with ReduceOnPlateau, but results were less impactful in improving diversity.
-4. **Experiment 4**: Lowered the number of beams and diversity penalty, focusing on more accurate but less diverse outputs.
-5. **Experiment 5**: Introduced warmup scheduling with increased diversity, leading to a more balanced outcome in both accuracy and diversity.
-6. **Experiment 6**: Pushed for higher diversity with an increased contrastive loss and diversity penalty, but the BLEU score dropped significantly.
-7. **Experiment 7**: Further increased the contrastive loss to maximize diversity, leading to a notable drop in accuracy.
-8. **Experiment 8**: Combined warmup scheduling with a moderate contrastive loss, yielding the highest Penalized BLEU score by effectively balancing accuracy and diversity.
-9. **Experiment 9**: Fine-tuned the parameters to find the best balance between accuracy and diversity, achieving strong BLEU and Penalized BLEU scores.
+1. **Baseline Experiment**: 
+   - **Goal**: Establish a baseline without contrastive loss, scheduler, or other advanced features.
+   - **Results**: BLEU score: 46.6373, Penalized BLEU score: 3.541
+   - **Discussion**: The baseline model achieved good BLEU scores across epochs, but the Penalized BLEU scores indicate a lack of diversity in generated paraphrases.
+
+2. **Experiment 1**: 
+   - **Goal**: Introduce contrastive loss with a focus on accuracy.
+   - **Scheduler**: Cosine scheduler was used for its smooth decay, which helps avoid sudden drops that could cause premature convergence.
+   - **Results**: BLEU score: 45.1888, Penalized BLEU score: 13.306.
+   - **Discussion**: The model achieved a good BLEU score but with limited diversity, leading to a moderate Penalized BLEU score.
+
+3. **Experiment 2**: 
+   - **Goal**: Improve diversity without sacrificing BLEU score.
+   - **Scheduler**: Cosine scheduler provided a gradual learning rate decay, which allowed the model to adapt slowly and maintain stability.
+   - **Results**: BLEU score: 46.1133, Penalized BLEU score: 11.234.
+   - **Discussion**: Slight improvements in diversity were achieved with a higher BLEU score, but further tuning was needed to enhance the Penalized BLEU score.
+
+4. **Experiment 3**: 
+   - **Goal**: Test dynamic learning rate adjustment with ReduceOnPlateau scheduler.
+   - **Scheduler**: ReduceOnPlateau was chosen to dynamically lower the learning rate when improvements plateaued, aiming for finer model adjustments.
+   - **Results**: BLEU score: 45.9262, Penalized BLEU score: 10.647.
+   - **Discussion**: The model's BLEU score remained stable, but the diversity did not increase as desired, leading to a lower Penalized BLEU score.
+
+5. **Experiment 4**: 
+   - **Goal**: Focus on accuracy with lower beams and a conservative diversity penalty.
+   - **Scheduler**: Cosine scheduler was retained for its ability to provide smooth and consistent learning rate decay.
+   - **Results**: BLEU score: 46.2459, Penalized BLEU score: 12.792.
+   - **Discussion**: The model achieved a balanced outcome with a high BLEU score but less diverse paraphrases, reflected in a moderate Penalized BLEU score.
+
+6. **Experiment 5**: 
+   - **Goal**: Explore the impact of warmup scheduling on diversity.
+   - **Scheduler**: Warmup scheduler was used to gradually increase the learning rate, allowing the model to stabilize before fully engaging in the learning process.
+   - **Results**: BLEU score: 46.3249, Penalized BLEU score: 14.087.
+   - **Discussion**: This led to smoother learning, resulting in a higher Penalized BLEU score with slightly better diversity.
+
+7. **Experiment 6**: 
+   - **Goal**: Maximize diversity with a lower learning rate and higher contrastive loss.
+   - **Scheduler**: Cosine scheduler continued to provide smooth decay as diversity was pushed further.
+   - **Results**: BLEU score: 40.6632, Penalized BLEU score: 22.401.
+   - **Discussion**: The model achieved a high Negative BLEU score but at the cost of accuracy, resulting in a lower BLEU score.
+
+8. **Experiment 7**: 
+   - **Goal**: Combine warmup scheduling with moderate contrastive loss for a balanced outcome.
+   - **Scheduler**: Warmup scheduler allowed the model to gradually adjust to the increased diversity.
+   - **Results**: BLEU score: 38.5582, Penalized BLEU score: 24.192.
+   - **Discussion**: The highest Penalized BLEU score was achieved, indicating a successful balance between accuracy and diversity.
+
+9. **Experiment 8**: 
+    - **Goal**: Fine-tune the balance between accuracy and diversity.
+    - **Scheduler**: Warmup scheduler helped stabilize early learning, ensuring consistent improvement.
+    - **Results**: BLEU score: 42.3426, Penalized BLEU score: 20.097.
+    - **Discussion**: The model achieved the most balanced result with strong BLEU and Penalized BLEU scores.
+
+10. **Experiment 9**:
+    - **Goal**: Explore the impact of warmup scheduling on the stability of the learning process.
+    - **Scheduler**: Warmup scheduler was used to stabilize the model’s learning process over a longer training period, with early stopping in place to prevent overfitting.
+    - **Results**: BLEU score: 41.6671, Penalized BLEU score: 22.820.
+    - **Discussion**: This experiment demonstrated a steady improvement in Penalized BLEU score, peaking after 19 epochs.
 
 ### Conclusion
 
-The experiments showed that balancing accuracy and diversity in paraphrase generation requires careful tuning of hyperparameters. The best results were achieved with a moderate learning rate, a carefully adjusted contrastive loss weight, and a warmup scheduler. Future work could further refine these parameters and explore additional data augmentation techniques to improve diversity without compromising accuracy.
+The experiments revealed that balancing accuracy and diversity is key to optimizing the Penalized BLEU score. The warmup scheduler, in particular, proved effective in stabilizing the learning process, allowing the model to adapt more effectively to changes in hyperparameters. Fine-tuning the contrastive loss weight, learning rate, and beam search configuration enabled the achievement of a strong final model performance.
+
+Future work could focus on exploring alternative data augmentation strategies and further optimizing the contrastive loss component to improve both accuracy and diversity.
+
   
 ## BART - Paraphrase Type Detection
 
@@ -858,25 +920,15 @@ The automatic mixed precision (AMP) feature of PyTorch was used to speed up trai
 
 </details>
 
-## Methodologies for BART Detection  
-
-
 
 ## Experiments for BERT
 
-  
-
 We used the default datasets provided for training and validation with no modifications.
 
-  
+The baseline for our comparisons includes most smaller improvements to the BERT model listed above. The baseline model is further described in the [Results](#results) section. The baseline model was trained for 10 epochs at 10.000 samples per epoch. 
 
-The baseline for our comparisons includes most smaller improvements to the BERT model listed above. The baseline model is further described in the [Results](#results) section. The baseline model was trained for 10 epochs at 10.000 samples per epoch.
-
-  
 
 The models were trained and evaluated on the Grete cluster. The training was done on a single A100 GPU. The training time for the baseline model was approximately 1 hour.
-
-  
 
 We used [Ray Tune](https://docs.ray.io/en/latest/tune/index.html) to perform hyperparameter tuning. This allowed us to efficiently explore the hyperparameter space and find the best hyperparameters for our model. We used [Optuna](https://docs.ray.io/en/latest/tune/api/doc/ray.tune.search.optuna.OptunaSearch.html) to search the hyperparameter space and [AsyncHyperBandScheduler](https://docs.ray.io/en/latest/tune/api/doc/ray.tune.schedulers.AsyncHyperBandScheduler.html) as the scheduler. The hyperparameters were searched for the whole model, not for each task individually. This was done to avoid overfitting to a single task. We searched for hyperparameters trying to minimize the overfitting of the model to the training data.
 
@@ -887,12 +939,6 @@ We used [Ray Tune](https://docs.ray.io/en/latest/tune/index.html) to perform hyp
   
 
 The trained models were evaluated on the validation set. The best model was selected based on the validation results ('dev'). The metrics used for the evaluation were accuracy only for paraphrase identification and sentiment classification, and Pearson correlation for semantic textual similarity.
-
-
-## Experiments for BART Generation
-
-
-## Experiments for BART Detection
 
 
 ## Contributors

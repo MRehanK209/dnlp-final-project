@@ -23,7 +23,7 @@ Regularization techniques were applied to prevent overfitting and stabilize the 
 ### AdamW & SophiaH Optimizers:
 We explored alternative optimizers like SophiaH, to optimize the training process. While AdamW was part of our baseline setup, SophiaH was evaluated as a potential improvement. However, SophiaH led to a slightly lower correlation of 0.365, indicating it did not outperform the baseline.
 
-#### Data Scaling:
+### Data Scaling:
 We attempted to scale the similarity scores from the original range of 0 to 5 down to a continuous range between 0 and 1. The rationale was to normalize the data and potentially improve the model's learning. Unfortunately, this adjustment did not result in any performance gains, as the correlation remained at the baseline level of 0.375.
 
 ### BERT Architecture:

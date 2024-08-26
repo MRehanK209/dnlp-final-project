@@ -8,8 +8,8 @@ from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 from transformers import AutoTokenizer, BartModel
+from sklearn.metrics import matthews_corrcoef
 from optimizer import AdamW
-
 
 TQDM_DISABLE = False
 
@@ -34,20 +34,22 @@ class BartWithClassifier(nn.Module):
         # Return the probabilities
         probabilities = self.sigmoid(logits)
         return probabilities
-
-
+        
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=11711)
     parser.add_argument("--use_gpu", action="store_true")
-    parser.add_argument("--epochs", type=int, default=5)
+    parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--lr", type=int, default=1e-5)
+    parser.add_argument("--use_weight", type=str, default="None", choices=["None", "Deterministic","Fixed"])
+    
     args = parser.parse_args()
     return args
 
 
 def accuracy_binary(predicted_labels_np,true_labels_np):
     accuracies = []
+    matthews_coefficients = []
     for label_idx in range(true_labels_np.shape[1]):
         correct_predictions = np.sum(
             true_labels_np[:, label_idx] == predicted_labels_np[:, label_idx]
@@ -55,10 +57,60 @@ def accuracy_binary(predicted_labels_np,true_labels_np):
         total_predictions = true_labels_np.shape[0]
         label_accuracy = correct_predictions / total_predictions
         accuracies.append(label_accuracy)
-    return np.mean(accuracies)
+        #compute Matthwes Correlation Coefficient for each paraphrase type
+        matth_coef = matthews_corrcoef(true_labels_np[:,label_idx], predicted_labels_np[:,label_idx])
+        matthews_coefficients.append(matth_coef)
+    return np.mean(accuracies), np.mean(matthews_coefficients)
 
+def convert_labels_to_binary(paraphrase_types, num_labels=7):
+    binary_labels = []
+    for types in paraphrase_types:
+        binary_label = [0] * num_labels
+        for t in eval(types):
+            if t != 0:
+                binary_label[t-1] = 1 
+        binary_labels.append(binary_label)
+    return binary_labels
 
-def transform_data(dataset, max_length=512):
+def smoothness_inducing_loss(model, inputs, labels, criterion, epsilon=1e-6, lambda_reg=0.01):
+    
+    # Get the input embeddings from the BART model
+    input_embeddings = model.bart.encoder.embed_tokens(inputs['input_ids'])
+    
+    # Add the small Gaussian noise to the embeddings
+    noise = torch.randn_like(input_embeddings) * epsilon
+    perturbed_embeddings = input_embeddings + noise
+
+    # Forward pass with the original inputs
+    original_output = model(input_ids=inputs['input_ids'], attention_mask=inputs['attention_mask'])
+    
+    # Forward pass with the perturbed embeddings
+    perturbed_output = model.bart(
+        inputs_embeds=perturbed_embeddings, 
+        attention_mask=inputs['attention_mask'],
+        decoder_input_ids=inputs['input_ids']  # or decoder_inputs_embeds=decoder_embeddings if you want to use embeddings
+    )
+    perturbed_output = model.classifier(perturbed_output.last_hidden_state[:, 0, :])
+    perturbed_output = model.sigmoid(perturbed_output)
+
+    original_loss = criterion(original_output, labels.float())
+    
+    # Calculate the smoothness regularization term (L2 norm)
+    smoothness_loss = torch.mean(torch.norm(original_output - perturbed_output, p=2, dim=-1))
+    
+    # Combine the original loss with the smoothness regularization term
+    total_loss = original_loss + lambda_reg * smoothness_loss
+    
+    return total_loss
+
+def bregman_proximal_point_update(optimizer, model, original_params, eta=1e-5):
+
+    # Apply the Bregman proximal point update
+    with torch.no_grad():
+        for param, original_param in zip(model.parameters(), original_params):
+            param.copy_(param - eta * (param - original_param))
+
+def transform_data(dataset, max_length=512, batch_size = 64):
     """
     dataset: pd.DataFrame
 
@@ -78,25 +130,24 @@ def transform_data(dataset, max_length=512):
     """
     sentences1 = dataset['sentence1'].tolist()
     sentences2 = dataset['sentence2'].tolist()
-    tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
+    tokenizer = AutoTokenizer.from_pretrained("facebook/bart-large")
     encodings = tokenizer(sentences1, sentences2, truncation=True, padding=True, max_length=max_length, return_tensors='pt')
     
     input_ids = encodings['input_ids']
     attention_mask = encodings['attention_mask']
 
     if 'paraphrase_types' in dataset.columns:
-        binary_labels = dataset['paraphrase_types'].apply(lambda x: [1 if int(i) != 0 else 0 for i in x.strip('[]').split(', ')])
-        binary_labels = torch.tensor(binary_labels.tolist())
+        binary_labels = torch.tensor(convert_labels_to_binary(dataset["paraphrase_types"].tolist()))
         dataset = TensorDataset(input_ids, attention_mask, binary_labels)
-
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     else :
         dataset = TensorDataset(input_ids, attention_mask)
+        dataloader = DataLoader(dataset, batch_size=batch_size)
     
-    dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
     return dataloader
 
 
-def train_model(model, train_data, dev_data, device, args):
+def train_model(model, train_data, dev_data,weight_tensor, device, args):
     """
     Train the model. You can use any training loop you want. We recommend starting with
     AdamW as your optimizer. You can take a look at the SST training loop for reference.
@@ -109,52 +160,40 @@ def train_model(model, train_data, dev_data, device, args):
     """
     ### TODO
 
-    criterion = nn.BCEWithLogitsLoss()
+    # criterion = FocalLoss()
+    criterion = nn.BCELoss(weight = weight_tensor)
     optimizer = AdamW(model.parameters(), lr=args.lr)
-
+    lambda_reg = 0.01
+    eta = 1e-5
     for epoch in range(args.epochs):
+        model.train() 
+        total_loss = 0
         all_pred = []
         all_labels = []
-        model.train()
-        train_loss = 0
-        num_batches = 0
+
         for batch in tqdm(train_data, desc=f"Training Epoch {epoch + 1}", disable=TQDM_DISABLE):
+            input_ids, attention_mask, labels = [b.to(device) for b in batch]
             optimizer.zero_grad()
 
-            input_ids, attention_mask, labels = batch
-
-            input_ids = input_ids.to(device)
-            attention_mask = attention_mask.to(device)
-            labels = labels.to(device)
-
-            logits = model(input_ids,attention_mask)
-            loss = criterion(logits, labels.float())
-
+            original_params = [param.clone() for param in model.parameters()]
+            inputs = {'input_ids': input_ids, 'attention_mask': attention_mask}
+            loss = smoothness_inducing_loss(model, inputs, labels, criterion)
             loss.backward()
             optimizer.step()
+            bregman_proximal_point_update(optimizer, model, original_params, eta=eta)
 
-            train_loss += loss.item()
-            num_batches += 1
+            total_loss += loss.item()
+            all_pred.extend((model(**inputs) > 0.5).int().cpu().numpy())
+            all_labels.extend(labels.int().cpu().numpy())
 
-            predicted_labels = (logits > 0.5).int()
-            all_pred.append(predicted_labels)
-            all_labels.append(labels)
+        avg_loss = total_loss / len(train_data)
+        train_accuracy, train_mathhews_coefficient = accuracy_binary(np.array(all_pred), np.array(all_labels))
+        validation_accuracy, validation_mathhews_coefficient = evaluate_model(model, dev_data, device)
 
-        all_predictions = torch.cat(all_pred, dim=0)
-        all_true_labels = torch.cat(all_labels, dim=0)
-
-        true_labels_np = all_true_labels.cpu().numpy()
-        predicted_labels_np = all_predictions.cpu().numpy()
-
-        training_acc = accuracy_binary(predicted_labels_np,true_labels_np)
-        epoch_train_loss = train_loss/num_batches
-        print(f"Training Epoch {epoch + 1} Training Loss: {epoch_train_loss:.4f}")
-        print(f"Training Epoch {epoch + 1} Training Accuracy: {training_acc:.4f}")
-        validation_acc = evaluate_model(model, dev_data, device)
-        print(f"Training Epoch {epoch + 1} Validation Accuracy: {validation_acc:.4f}")
-
+        print(f"Epoch {epoch+1}/{args.epochs}:")
+        print(f"Training Loss: {avg_loss:.4f}, Training Accuracy: {train_accuracy:.4f}, Training Mathew Coefficient: {train_mathhews_coefficient:.4f}")
+        print(f"Validation Accuracy: {validation_accuracy:.4f}, Validation Mathew Coefficient: {validation_mathhews_coefficient:.4f}")
     return model
-
 
 def test_model(model, test_data, test_ids, device):
     """
@@ -216,8 +255,8 @@ def evaluate_model(model, test_data, device):
     true_labels_np = all_true_labels.cpu().numpy()
     predicted_labels_np = all_predictions.cpu().numpy()
 
-    accuracy1 = accuracy_binary(predicted_labels_np,true_labels_np)
-    return accuracy1
+    accuracy1, mathhews_coefficient1 = accuracy_binary(predicted_labels_np,true_labels_np)
+    return accuracy1,mathhews_coefficient1
 
 
 def seed_everything(seed=11711):
@@ -232,6 +271,8 @@ def seed_everything(seed=11711):
 
 def finetune_paraphrase_detection(args):
     model = BartWithClassifier()
+    # model.bart.gradient_checkpointing_enable()
+
     device = torch.device("cuda") if args.use_gpu else torch.device("cpu")
     model = model.to(device)
 
@@ -241,24 +282,40 @@ def finetune_paraphrase_detection(args):
     # TODO You might do a split of the train data into train/validation set here
     # (or in the csv files directly)
 
-    train_dataset = train_dataset.sample(frac=1, random_state=42).reset_index(drop=True)
-    train_ratio = 0.7
-    train_size = int(train_ratio * len(train_dataset))
-    train_df = train_dataset[:train_size]
-    dev_df = train_dataset[train_size:]
-    
+    np.random.seed(42)
+    train_ratio = 0.8
+    shuffled_indices = np.random.permutation(np.arange(train_dataset.shape[0]))
+    data_shuffled = train_dataset.iloc[shuffled_indices]
+    train_size = int(train_ratio * len(data_shuffled))
+    train_df = data_shuffled.iloc[:train_size]
+    dev_df = data_shuffled.iloc[train_size:]
+
     train_data = transform_data(train_df)
     dev_data = transform_data(dev_df)
     test_data = transform_data(test_dataset)
 
+    if args.use_weight == "Fixed":
+        class_weights = [1.5,1.0,1.5,1.5,1.5,1.0,1.0]
+        weight_tensor = torch.tensor(class_weights, dtype=torch.float)
+        weight_tensor = weight_tensor.to(device) 
+    elif args.use_weight == "Deterministic":
+        class_frequencies = np.mean(convert_labels_to_binary(train_df["paraphrase_types"]), axis=0)
+        inverse_class_frequencies = 1.0 / class_frequencies
+        weight_tensor = torch.tensor(inverse_class_frequencies, dtype=torch.float)
+        weight_tensor = weight_tensor.to(device) 
+    elif args.use_weight == "None":
+        weight_tensor = None
+
     print(f"Loaded {len(train_dataset)} training samples.")
 
-    model = train_model(model, train_data, dev_data, device,args)
+    
+    model = train_model(model, train_data, dev_data, weight_tensor, device,args)
 
     print("Training finished.")
 
-    accuracy = evaluate_model(model, dev_data, device)
+    accuracy, matthews_corr = evaluate_model(model, train_data, device)
     print(f"The accuracy of the model is: {accuracy:.3f}")
+    print(f"Matthews Correlation Coefficient of the model is: {matthews_corr:.3f}")
 
     test_ids = test_dataset["id"]
     test_results = test_model(model, test_data, test_ids, device)
@@ -271,3 +328,4 @@ if __name__ == "__main__":
     args = get_args()
     seed_everything(args.seed)
     finetune_paraphrase_detection(args)
+

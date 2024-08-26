@@ -24,14 +24,6 @@ Arsalane, Mohamed Reda <br/>
 
 ## Introduction
 
-  
-
-[![Python 3.10](https://img.shields.io/badge/Python-3.10-blue.svg)](https://www.python.org/downloads/release/python-3100/)
-
-[![PyTorch 2.0](https://img.shields.io/badge/PyTorch-2.0-orange.svg)](https://pytorch.org/)
-
-[![Apache License 2.0](https://img.shields.io/badge/License-Apache%202.0-green.svg)](https://www.apache.org/licenses/LICENSE-2.0)
-
 [![Final](https://img.shields.io/badge/Status-Final-purple.svg)](https://https://img.shields.io/badge/Status-Final-blue.svg)
 
 [![Black Code Style](https://img.shields.io/badge/Code%20Style-Black-black.svg)](https://black.readthedocs.io/en/stable/)
@@ -40,18 +32,11 @@ Arsalane, Mohamed Reda <br/>
 
   
 
-This repository our official implementation of the Multitask BERT project and BART Fine Tuning for the Deep Learning for Natural Language
+This repository is our official implementation of the Multitask BERT project and BART Fine Tuning for the Deep Learning for Natural Language
 
 Processing course at the University of Göttingen.
 
-BERT: ([BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/abs/1810.04805))
-
-A pre-trained BART:
-
-The BART model was used as the basis for our experiments for PTD and PTG tasks. The model was fine-tuned separately for the datasets of PTG and PTD tasks.
-
-
-## Requirements
+## Setup Requirements
 
 To install requirements and all dependencies and create the environment:
 
@@ -71,56 +56,291 @@ If setting up the environment on GWDG, then run:
 ```
 
 The environment is activated with `conda activate dnlp`.
-
-
-Additionally, the POS and NER tags need to be downloaded. This can be done by running `python -m spacy download en_core_web_sm`.
+  
+The script will create a new conda environment called `dnlp` and install all required packages.
 
   
+## BERT - Quora Question Pair Paraphrase Detection
 
-Alternatively, use the provided script `setup.sh`.
+### Introduction
 
-The script will create a new conda environment called `dnlp2` and install all required packages.
+This project focuses on building a robust model for paraphrase detection using the Quora Question Pairs dataset. The primary goal is to determine whether two given questions have the same intent or meaning, thereby detecting paraphrases. The task aims to improve the model's accuracy and reliability in differentiating between paraphrased and non-paraphrased question pairs. Various deep learning techniques, including BERT-based models, were employed, with fine-tuning and hyperparameter optimization used to achieve the best results.
+
+### Setup Instructions
+
+To set up the environment and run the model, follow these steps:
+
+1. Run `./setwp_gwdf.sh` to install all the required dependencies and set up the environment.
+2. Use `sbatch run_train_bert.sh` with 'qqp' or 'multitask' argument on a GPU-enabled cluster to initiate model training using Slurm.
+
+The setup script installs necessary libraries such as TensorFlow, PyTorch, and HuggingFace Transformers. A GPU-enabled environment with CUDA support is recommended for faster training.
+
+### Data
+
+The project uses the Quora Question Pairs dataset, which is available in the `data` directory. The following datasets are utilized:
+
+1. `quora-paraphrase-train.csv`: Contains 141,506 training question pairs along with labels indicating whether they are paraphrases.
+2. `quora-paraphrase-dev.csv`: Contains 20,215 validation question pairs for tuning hyperparameters and preventing overfitting.
+3. `quora-paraphrase-test-student.csv`: Contains 40,431 test question pairs to evaluate the model's performance.
+
+Model outputs and metrics are saved in the 'quota-paraphrase-dev-output.csv' and 'quota-paraphrase-test-output.csv' inside the prediction folder.
+
+### Methodology
+
+This project utilizes a BERT-based model for paraphrase detection, leveraging the HuggingFace Transformers library. The input question pairs are tokenized using BERT's tokenizer, and embeddings are generated for each question pair. 
+The following enhancements were implemented:
 
 
-  
-## BERT
+1. **Loss Function**: Binary cross-entropy with logit loss was used to train the model. To make up for imbalanced data like 62% of data 0-class and 38% of data belonging to the 1-class, some modifications like pos_weight factor or using focal_loss to  a loss element that penalizes false positives and negatives.
+2. **Learning Rate Scheduling**: Both cosine decay and learning rate warmup strategies were explored to optimize training efficiency.
+3. **Early Stopping**: Early stopping was implemented to terminate training if no improvement in validation loss was observed, thereby preventing overfitting.
 
-To train the model, activate the environment and run this command:
+### Hyperparameter Tuning Summary
 
-  
+| Hyperparameter                | Description                                                                                   |
+|-------------------------------|-----------------------------------------------------------------------------------------------|
+| `--epochs`                    | Number of training epochs. Determines the number of complete passes through the training data, directly influencing how long the model will train.
+| `--learning_rate`             | Learning rate. Controls how much to change the model's weights during each step of training. A higher learning rate can speed up training but may lead to overshooting minima, while a lower rate allows for more precise but slower convergence. |
+| `--pos_weight`                | Positive class weight. Used to handle class imbalance by giving more importance to the minority class during training, typically in binary classification tasks. |
+| `--alpha`                     | A hyperparameter is used in some loss functions, like Focal Loss, to control the balance between different classes or aspects of the loss. It adjusts the importance of positive and negative samples in the training process. |
+| `--gamma`                     | A parameter used in Focal Loss to reduce the relative loss for well-classified examples, focusing more on hard, misclassified examples. This helps in addressing the class imbalance. |
+| `--label_smoothing_factor`    | Label smoothing factor. A regularization technique that prevents the model from becoming too confident by distributing some of the probability from the true class to the other classes, reducing overfitting. |
+| `--lambda` (Regression Factor) | Regularization parameter for controlling the strength of regularization, such as L1 or L2, to prevent overfitting by penalizing large weights. |
+| `--noise (Epsilon)`           | A small amount of noise is added to the input data or parameters during training to improve generalization and robustness against small perturbations. |
+| `--optimizer`                 | The optimization algorithm used to update the model's weights during training, such as AdamW, SGD, or RMSprop. Different optimizers can significantly affect the speed and quality of convergence. |
+| `--weight_decay`              | Weight decay (also known as L2 regularization) adds a penalty to the loss function based on the size of the weights, helping to prevent overfitting by discouraging overly complex models. |
+| `--regularization`            | General term for techniques like L1, L2, or dropout that help prevent overfitting by penalizing large weights or randomly dropping units during training. |
+| `--batch_size`                | The number of training examples used in one iteration of model training. Larger batch sizes can lead to faster training but may require more memory, while smaller batches provide more frequent updates. |
+| `--dropout`                   | Dropout rate. A regularization technique where a fraction of neurons is randomly set to zero during each training step, which helps prevent the model from becoming too reliant on specific neurons and improves generalization. |
 
-```sh
+This summary provides an overview of each hyperparameter's role in the training process, helping to understand how they influence the model's performance and generalization capabilities.
 
-python -u multitask_classifier.py --use_gpu
+### Experiments
 
-```
+The table below summarizes the key hyperparameters, results, and insights from each experiment conducted:
 
-  
 
-There are a lot of parameters that can be set. To see all of them, run `python multitask_classifier.py --help`. The most
+Abbreviations and Terms:
+Exp: Experiment Number
+Ep: Epochs - Number of training epochs
+LR: Learning Rate
+PosWt: Positive Weight - Class weighting for handling imbalance
+α (Alpha): Alpha - Parameter in Focal Loss
+γ (Gamma): Gamma - Parameter in Focal Loss
+ε (Epsilon): Epsilon - Label Smoothing Factor(In the code this is called label smoothing)
+λ (Lambda): Lambda - Regression Factor for L2 Regularization
+δ (Delta): Small perturbation added during training for robustness(In code this is called Epsilon)
+Opt: Optimizer used (e.g., AdamW)
+WD: Weight Decay - Regularization technique
+Reg: Type of Regularization used ( L2, Dropout)
+BS: Batch Size - Number of training samples per batch
+DO: Dropout rate
+Time: Time Consumption for the training run
+Dev Acc: Development (Validation) Accuracy
+Train Acc: Training Accuracy
 
-important ones are:
 
-  
+| Exp | Ep | LR   | PosWt | α   | γ   | ε    | λ    | δ      | Opt  | WD   | Reg  | BS | DO | Time  | Dev Acc | Train Acc |    
+|-----|----|------|-------|-----|-----|-----|------|--------|------|------|------|----|----|-------|---------|-----------|
+| B   | 3  | 1e-5 | None  | N/A | N/A | N/A | N/A  | N/A    | AdamW| 0.01 | None | 64 | 0.1| 40m   | 77.0%   | 93.1%     |
+| 1   | 5  | 5e-5 | 2.0   | N/A | N/A | N/A | N/A  | N/A    | AdamW| 0.01 | None | 64 | 0.1| 1h    | 73.2%   | 91.7%     |
+| 2   | 5  | 3e-5 | None  | 0.6 | 3   | N/A | N/A  | N/A    | AdamW| 0.001| Drop | 64 | 0.3| 1h 05m| 74.1%   | 97.8%     |
+| 3   | 10 | 3e-5 | None  | 0.5 | 10  | N/A | N/A  | N/A    | AdamW| 0.001| Drop | 64 | 0.3| 1h 55m| 75.7%   | 97.3%     |
+| 4   | 10 | 5e-5 | None  | 0.1 | 3   | 0.5 | N/A  | N/A    | AdamW| 0.01 | Drop | 64 | 0.3| 2h    | 77.3%   | 98.3%     |
+| 5   | 10 | 8e-5 | None  | 0.1 | 3   | 0.09| N/A  | N/A    | AdamW| 0.1  | Drop | 64 | 0.5| 1h 45m| 77.4%   | 97.9%     |
+| 6   | 10 | 8e-5 | None  | 0.1 | 3   | 0.09| 1e-2 | 1e-6   | AdamW| 0    | L2   | 32 | 0.1| 6h    | 70.6%   | 72.5%     |
+| 7   | 5  | 3e-5 | None  | N/A | N/A | N/A | 1e-4 | 1e-6  | AdamW| 0    | L2   | 32  | 0.1| 3h 05m| 75.5%   | 77.9%     |
+| 8   | 10 | 8e-5 | None  | N/A | N/A | N/A | 1e-6 | 1e-10  | AdamW| 0    | L2   | 32 | 0.1| 7h    | 77.8%   | 79.4%     |
+| 9  | 20 | 8e-5 | None  | 0.2 | 2   | 0.1 | 1e-5 | 1e-8  | AdamW| 0.01 | None  | 64| 0.3| 5h 30m| 85.2%     | 90.0%    |
 
-| Parameter | Description  |
+
+\[
+\text{Loss} = -\alpha (1 - p_t)^\gamma \cdot \left[ y \log(\hat{y}) + (1-y) \log(1-\hat{y}) \right] + \epsilon \cdot \left( \frac{1}{2} \right) + \lambda \cdot \sum_{j=1}^{n} \left( f(x_j + \delta) - f(x_j) \right)^2
+\]
+ 
+
+### Detailed Results Analysis
+
+1. **Baseline Experiment**:
+   - **Goal**: Establish a benchmark with simple settings using binary cross-entropy loss without any advanced regularization techniques.
+   - **Configuration**:
+     - Epochs: 3, Learning Rate: 1e-5, Optimizer: AdamW, Weight Decay: 0.01, Batch Size: 64, Dropout: 0.1
+   - **Results**: Dev Accuracy: 77.0%, Train Accuracy: 93.1%
+   - **Discussion**: The baseline model showed a significant difference between training and validation accuracy, indicating potential overfitting. The high training accuracy suggests the model was able to learn patterns from the training data, but the relatively lower validation accuracy shows it had difficulty generalizing to new data.
+
+2. **Experiment 1**:
+   - **Goal**: Evaluate the effect of positive class weighting (Pos Weight = 2.0) on handling class imbalance.
+   - **Configuration**:
+     - Epochs: 5, Learning Rate: 5e-5, Optimizer: AdamW, Weight Decay: 0.01, Batch Size: 64, Dropout: 0.1, Pos Weight: 2.0
+   - **Results**: Dev Accuracy: 73.2%, Train Accuracy: 91.7%
+   - **Discussion**: Introducing positive class weighting slightly reduced validation accuracy. This might indicate that while the model became more sensitive to the positive class, this sensitivity did not improve overall generalization and possibly overemphasized positive examples.
+
+3. **Experiment 2**:
+   - **Goal**: Use dropout regularization and introduce alpha-gamma hyperparameters to improve robustness.
+   - **Configuration**:
+     - Epochs: 5, Learning Rate: 3e-5, Alpha: 0.6, Gamma: 3, Optimizer: AdamW, Weight Decay: 0.001, Batch Size: 64, Dropout: 0.3
+   - **Results**: Dev Accuracy: 74.1%, Train Accuracy: 97.8%
+   - **Discussion**: The introduction of dropout and focal loss components (alpha and gamma) increased training accuracy significantly. However, only a slight improvement in dev accuracy was observed, suggesting more tuning is needed to balance training and validation performance.
+
+4. **Experiment 3**:
+   - **Goal**: Increase the number of epochs to examine effects on model stability and accuracy.
+   - **Configuration**:
+     - Epochs: 10, Learning Rate: 3e-5, Alpha: 0.5, Gamma: 10, Optimizer: AdamW, Weight Decay: 0.001, Batch Size: 64, Dropout: 0.3
+   - **Results**: Dev Accuracy: 75.7%, Train Accuracy: 97.3%
+   - **Discussion**: Training for more epochs slightly increased dev accuracy. However, the high training accuracy with a gap in validation accuracy suggests ongoing overfitting despite regularization efforts.
+
+5. **Experiment 4**:
+   - **Goal**: Implement label smoothing to reduce overconfidence in predictions and improve generalization.
+   - **Configuration**:
+     - Epochs: 10, Learning Rate: 5e-5, Alpha: 0.1, Gamma: 3, Label Smoothing Factor: 0.5, Optimizer: AdamW, Weight Decay: 0.01, Batch Size: 64, Dropout: 0.3
+   - **Results**: Dev Accuracy: 77.3%, Train Accuracy: 98.3%
+   - **Discussion**: Label smoothing provided noticeable improvements in both training and validation accuracies, indicating a positive impact on reducing model overconfidence.
+
+6. **Experiment 5**:
+   - **Goal**: Test the effect of higher learning rates and varying regularization techniques.
+   - **Configuration**:
+     - Epochs: 10, Learning Rate: 8e-5, Alpha: 0.1, Gamma: 3, Label Smoothing Factor: 0.09, Optimizer: AdamW, Weight Decay: 0.1, Batch Size: 64, Dropout: 0.5
+   - **Results**: Dev Accuracy: 77.4%, Train Accuracy: 97.9%
+   - **Discussion**: Increasing the learning rate and dropout further improved dev accuracy, showing that higher regularization and a more aggressive learning rate can be beneficial for the model's generalization ability.
+
+
+7. **Experiment 6**:
+   - **Goal**: Combine high dropout and L2 regularization with a noise factor to assess performance and stability.
+   - **Configuration**:
+     - Epochs: 10, Learning Rate: 8e-5, Alpha: 0.1, Gamma: 3, Label Smoothing Factor: 0.09, Lambda: 1e-2, Delta: 1e-6, Optimizer: AdamW, Weight Decay: 0, Batch Size: 32, Dropout: 0.1
+   - **Results**: Dev Accuracy: 70.6%, Train Accuracy: 72.5%
+   -**Comlication**: The Batch Size: 64 raises the 'out of memory' error. Batch Size: 32 works but takes almost double the time, I had to cut short the epoch in the middle of the task.
+   - **Discussion**: This setup demonstrated a balance between training and validation accuracies, indicating improved stability and robustness when using combined regularization techniques. But to incorporate L2 regularisation I might have to complexify the loss function a little as the val acc drops.
+
+8. **Experiment 7**:
+   - **Goal**: To simplify the loss function with a not-so-aggressive regularisation.
+   - **Configuration**:
+     - Epochs: 10, Learning Rate: 3e-5, Optimizer: AdamW, Lambda: 1e-4, Delta: 1e-6, Weight Decay: 0, Batch Size: 32, Dropout: 0.5
+   - **Results**: Dev Accuracy: 75.5%, Train Accuracy: 77.9%
+   -**Complication**: Almost the same complication as the previous one.
+   - **Discussion**: This experiment showed modest results, suggesting that or fine-tuning of regularization parameters could be beneficial for better generalization.
+
+9. **Experiment 8**:
+    - **Goal**: Ease up on the regression factor(Lambda) and the noise (epsilon) hoping to get a better results by reducing the L2 regularization a little further.
+    - **Configuration**:
+      - Epochs: 10, Learning Rate: 8e-5, Lambda: 1e-6, Delta: 1e-10, Optimizer: AdamW, Weight Decay: 0, Batch Size: 32, Dropout: 0.2
+    - **Results**: Dev Accuracy: 77.8%, Train Accuracy: 79.4%
+    -**Complication**: Those complications are still there by the way.
+    - **Discussion**: Demonstrating effective results but not by much.
+
+10. **Experiment 9**:
+    - **Goal**: Try to get to get as much as possible by the time left.
+    - **Configuration**:
+      - Epochs: 25, Learning Rate: Schedular ReduceLROnPlateau(with factor 0.8), Alpha: 0.0, Gamma: 0, Label Smoothing Factor: 0, Lambda: 0, Delta: 0, Optimizer: AdamW, Weight Decay: 0.01, Batch Size: 64, Dropout: 0.1
+    - **Results**: Dev Accuracy: 79.0%, Train Accuracy: 99.4%
+    - **Discussion**: Due to the time consumption, with not much time left I get back to the simple model and rely on the learning rate to give the best result it could. I use here the This configuration achieved the highest validation accuracy, but there, the overfitting problem has risen in the absence of regularization.
+
+### Complications: 
+
+I have included the 'Time' consumption column to show a big complication in the task. It has almost 400k sentences to  flow through the model, so it is time-consuming. That is why I could not experiment few more techniques to their full potential like POS and NER tagging which helps the model to better understand the features and thereby improve the semantic understanding of the model. Also, the L2 regularisation which I calculate adds noise to the data(δ). You can see that in the multitask_classifier file in the Testing folder. Also, I could not experiment with the SophiaG optimizer as much as I should or wanted to. 
+
+### Conclusion
+
+The series of experiments conducted highlights the critical role of balancing various hyperparameters, regularization techniques, and optimization strategies to enhance model performance in paraphrase detection tasks. The baseline experiment established a strong starting point, but it clearly indicated overfitting issues due to high training accuracy and relatively lower validation accuracy. This was evident across several experiments, showing the importance of carefully managing model complexity to prevent overfitting.
+
+Experiments 2 to 5 explored the introduction of dropout regularization, alpha-gamma parameters, and label smoothing, which incrementally improved the model's robustness and generalization capabilities. The implementation of focal loss components (alpha and gamma) helped focus the model's learning on harder examples, but consistent validation accuracy improvements were modest, suggesting that fine-tuning these hyperparameters is essential for optimal performance.
+
+Regularization strategies such as L2 regularization, combined with noise injection (experiments 6 to 8), demonstrated the potential to stabilize the learning process and improve generalization. However, these configurations also revealed practical complications, including increased computational time and memory constraints, which limited the ability to fully explore more complex techniques. Experiment 7 specifically aimed to simplify the loss function to manage these challenges better, showing a balance between dev and training accuracy but not significantly improving results.
+
+The final experiment (Experiment 9) underscored the trade-off between achieving higher accuracy and managing overfitting. By reverting to a simpler model configuration and relying on adaptive learning rates, the highest validation accuracy was achieved, albeit with a notable overfitting issue. This highlights the importance of regularization, even when focusing on achieving the best possible accuracy.
+
+Overall, these experiments confirm that fine-tuning dropout rates, using regularization techniques (like L2 and label smoothing), and adjusting learning rates dynamically are vital strategies for controlling overfitting and enhancing model generalization. However, real-world constraints, such as time and computational resources, significantly impact the scope of experimentation. Future work should explore optimizing these hyperparameters in a more resource-efficient manner, potentially incorporating advanced optimizers like SophiaG, POS, and NER tagging techniques to improve the model's semantic understanding and performance.
+ 
+### Evaluation Metrics
+
+1. **Accuracy**: Measures the proportion of correctly classified question pairs.
+
+These metrics offer insights into the model's effectiveness in correctly identifying paraphrases and avoiding false positives.
+
+
+### Future Work
+The following enhancements can also be tested, as a part of additional work.
+1. **Data Augmentation**: Synonym replacement and back-translation techniques were employed to increase training data diversity.
+2. Experimenting with other language models such as Roberta and XLNet.
+3. Experiment with metrics like Recall, Precision, and F1 to monitor the model's class-specific performance.
+4. I want  to further experiments with regularization like L1, L2, or the Kl divergence loss.
+This README provides a comprehensive overview of the Quora Question Pair Paraphrase Detection project, including setup instructions, methodology, experiments, results, and future work directions.
+
+## BERT - Stanford Sentiment Treebank (SST) Dataset
+
+### Introduction
+
+This project focuses on improving a BERT-based model for multitask (sst, sts, and qqp). We tuned various hyperparameters to achieve this balance, and the results of our experiments are summarized in this document. Understanding a text in SST involves determining its polarity (positive, negative, or neutral). Sentiment analysis can reveal personal feelings about products, politicians, or news reports. Each phrase is labeled as negative, slightly negative, neutral, slightly positive, or positive.
+
+### Setup Instructions
+
+To set up the environment and run the model, follow these steps:
+
+1. Run `./setwp_gwdf.sh` to install all the required dependencies and set up the environment.
+2. Use `sbatch run_train_bert.sh` with 'sst' or 'multitask' argument on a GPU-enabled cluster to initiate model training using Slurm.
+
+The setup script installs necessary libraries such as TensorFlow, PyTorch, and HuggingFace Transformers. A GPU-enabled environment with CUDA support is recommended for faster training.
+
+### Methodology
+
+This section describes the methodology used in our experiments to extend the training of the multitask BERT model for Sentiment.
+
+### Hyperparameter Tuning Summary
+
+| Parameter               | Description                                                                    |
 | ----------------------- | ------------------------------------------------------------------------------ |
-| `--additional_input`  | Activates the usage for POS and NER tags for the input of BERT |
-| `--batch_size`  | Batch size.  |
-| `--clip`  | Gradient clipping value. |
-| `--epochs`  | Number of epochs.  |
-| `--hidden_dropout_prob` | Dropout probability for hidden layers. |
-| `--hpo_trials`  | Number of trials for hyperparameter optimization.  |
-| `--hpo` | Activate hyperparameter optimization.  |
-| `--lr`  | Learning rate. |
-| `--optimizer` | Optimizer to use. Options are `AdamW` and `SophiaH`. |
-| `--option`  | Determines if BERT parameters are frozen (`pretrain`) or updated (`finetune`). |
-| `--samples_per_epoch` | Number of samples per epoch. |
-| `--scheduler` | Learning rate scheduler to use. Options are `plateau`, `cosine`, and `none`. |
-| `--unfreeze_interval` | Number of epochs until the next BERT layer is unfrozen |
-| `--use_gpu` | Whether to use the GPU.  |
-| `--weight_decay`  | Weight decay for optimizer.  |
+| `--batch_size`          | Batch size.                                                                    |
+| `--epochs`              | Number of epochs.                                                              |
+| `--hidden_dropout_prob` | Dropout probability for hidden layers.                                         |
+| `--lr`                  | Learning rate.                                                                 |
+| `--use_gpu`             | Whether to use the GPU.                                                        |
+| `--seed`                | Random seed for reproducibility.                                               |
+| `--batch_size`          | Defining batch size for training model.                                        |
+| `--task`                | Task to be trained (sst, qqp, sts, etpc) or multitask to train togeather.      |
 
+### Experiments:
+
+#### Baseline
+
+For the baseline model, we chose the following hyperparameters. 
+
+- mode: `finetune`
+- epochs: `10`
+- learning rate: `1e-5`
+- optimizer: `AdamW`
+- batch size: `32`
+
+#### Smoothness-Inducing Regularization
+
+Initially, the baseline score was 52.2%, after trying some methods to improve the performance like data augmentation, the model was showing strong overfitting, which we tried to overcome using LRscheduling and EarlyStopping, but it was greatly complemented by the Smoothness-inducing regularization technique, which did not help in improving the validation accuracy but helped the model to avoid too strong overfitting on data.
+
+#### AdamW, SophiaH, Bregman proximal Point optimization
+
+Since various optimizers play a pivotal role in task definition, we tried a few of them to improve the model performance. There was no noticeable difference between AdamW and SophiaH they both performed the same with Bregman proximal Point optimization, it has addressed overfitting greatly but also hindered the overall learning of the model, using the Bregman proximal Point optimization model was getting an accuracy of roughly 25% accuracy in an initial epoch which is early half of that we got in AdamW and SophiaH i.e. roughly 45%
+
+Sophia: [Sophia: A Scalable Stochastic Second-order Optimizer for Language Model Pre-training](https://arxiv.org/abs/2305.14342).
+
+Bregman proximal Point: [Robust and Efficient Fine-Tuning for Pre-trained Natural Language Models Principled Regularized Optimization](https://aclanthology.org/2020.acl-main.197.pdf)
+
+#### Data Augmentation (Synonym Replacement and Random Noise) & Synthetic Dataset
+
+Given recent advances in imitation learning, particularly the demonstrated ability of compact language models to emulate the performance of larger, proprietary counterparts ([Alpaca: A Strong, Replicable Instruction-Following Model](https://crfm.stanford.edu/2023/03/13/alpaca.html)), we investigated the role of synthetic data in improving multitask classification models. Our focus was on sentiment classification. WE generated around 6000 more data points adding them to the original dataset to have a larger training dataset. OpenAI's GPT-3 and GPT-4 were trained on undisclosed datasets, which raises concerns about data overlap with our sentiment classification set. Even though these models are unlikely to reproduce specific test set instances, the issue persists and should be addressed. But, it just contributed to overfitting the model. A similar case was with the data augmentation techniques.
+
+### Experiment Results
+
+| Model name                      | Parameters                                | Accuracy |
+| ------------------------------- | ----------------------------------------- | -------- |
+| Baseline                        |                                           | 52.2%    |
+| Increasing model complexity     | `--lr 1e-05 --hidden_dropout_prob 0.1`    | 52.6%    |
+| Bregman proximal Point optim.   | `--lr 1e-05 --hidden_dropout_prob 0.3`    | 46.2%    |
+| bert projected attention layer  | `--lr 1e-05 --hidden_dropout_prob 0.3`    | 46.2%    |
+| SophiaH                         |                                           | 45.4%    |
+| Synthetic Data                  | `--sst_train data/synthetic_data.csv`     | 51.3%    |
+| Synonym Replacement             |                                           | 46.6%    |
+
+### Conclusion
+
+Even though we tried many things to improve the model accuracy there was negligible improvement from the baseline when we introduced more layers in a model like residual connection, layer normalization, and dropout. the accuracy went from 52.2% to 52.6%, and that's the best accuracy we got for the first task after trying many things.
 
 ## BART - Paraphrase Type Generation
 
@@ -383,6 +603,7 @@ In this study, we conducted a series of experiments to evaluate the effectivenes
 | No        | None            | Focal    | 0.1514        |
 | Yes       | None            | Focal    | 0.155         |
 
+
 ### Key Observations
 
 1. **SMART Regularization Impact:**
@@ -401,546 +622,6 @@ In this study, we conducted a series of experiments to evaluate the effectivenes
 The experiments demonstrate that SMART regularization combined with no additional weighting yields the best performance with Binary Cross-Entropy loss. However, the combination of regularization techniques, loss functions, and weighting strategies requires careful consideration to achieve optimal results.
 
 
-## Evaluation for BERT
-
-  
-
-The model is evaluated after each epoch on the validation set. The results are printed to the console and saved in
-
-the `logdir` directory. The best model is saved in the `models` directory.
-
-
-## Evaluation for BART Detection:
-
-The model is evaluated after each epoch on the validation set. The results are printed to the console. In BART Detection, 
-the model will run for all the epochs and return the model after training on the last epoch.
-
-## Results for BERT
-
-  
-
-As a Baseline of our model we chose the following hyperparameters. These showed to be the best against overfitting (which was our main issue) in our hyperparameter search and provided a good starting point for further improvements.
-
-  
-
-- mode: `finetune`
-
-- epochs: `20`
-
-- learning rate: `8e-5`
-
-- scheduler: `ReduceLROnPlateau`
-
-- optimizer: `AdamW`
-
-- clip norm: `0.25`
-
-- batch size: `64`
-
-  
-
-This allowed us to evaluate the impact of the different improvements to the model. The baseline model was trained at 10.000 samples per epoch until convergence. For further hyperparameter choices, see the default values in the [training script](./multitask_classifier.py).
-
-  
-
----
-
-  
-
-Our multitask model achieves the following performance on:
-
-  
-
-### [Paraphrase Identification on Quora Question Pairs](https://paperswithcode.com/sota/paraphrase-identification-on-quora-question)
-
-  
-
-Paraphrase Detection is the task of finding paraphrases of texts in a large corpus of passages.
-
-Paraphrases are “rewordings of something written or spoken by someone else”; paraphrase
-
-detection thus essentially seeks to determine whether particular words or phrases convey
-
-the same semantic meaning.
-
-  
-
-| Model name | Parameters  | Accuracy |
-| -------------- | ----------------------------------------- | -------- |
-| data2Vec | State-of-the-art single task model  | 92.4%  |
-| Baseline | | 87.0%  |
-| Tagging  | `--additional_input`  | 86.6%  |
-| Synthetic Data | `--sst_train data/ids-sst-train-syn3.csv` | 86.5%  |
-| SophiaH  | `--optimizer sophiah` | 85.3%  |
-
-  
-
-### [Sentiment Classification on Stanford Sentiment Treebank (SST)](https://paperswithcode.com/sota/sentiment-analysis-on-sst-5-fine-grained)
-
-  
-
-A basic task in understanding a given text is classifying its polarity (i.e., whether the expressed
-
-opinion in a text is positive, negative, or neutral). Sentiment analysis can be utilized to
-
-determine individual feelings towards particular products, politicians, or within news reports.
-
-Each phrase has a label of negative, somewhat negative,
-
-neutral, somewhat positive, or positive.
-
-  
-
-| Model name  | Parameters  | Accuracy |
-
-| ------------------------------- | ----------------------------------------- | -------- |
-| Heinsen Routing + RoBERTa Large | State-of-the-art single task model  | 59.8%  |
-| Tagging | `--additional_input`  | 50.4%  |
-| SophiaH | `--optimizer sophiah` | 49.4%  |
-| Baseline  | | 49.4%  |
-| Synthetic Data  | `--sst_train data/ids-sst-train-syn3.csv` | 47.6%  |
-
-  
-
-### [Semantic Textual Similarity on STS](https://paperswithcode.com/sota/semantic-textual-similarity-on-sts-benchmark)
-
-  
-
-The semantic textual similarity (STS) task seeks to capture the notion that some texts are
-
-more similar than others; STS seeks to measure the degree of semantic equivalence [Agirre
-
-et al., 2013]. STS differs from paraphrasing in it is not a yes or no decision; rather STS
-
-allows for 5 degrees of similarity.
-
-  
-
-| Model name | Parameters  | Pearson Correlation |
-| -------------- | ----------------------------------------- | ------------------- |
-| MT-DNN-SMART | State-of-the-art single task model  | 0.929 |
-| Synthetic Data | `--sst_train data/ids-sst-train-syn3.csv` | 0.875 |
-| Tagging  | `--additional_input`  | 0.872 |
-| SophiaH  | `--optimizer sophiah` | 0.870 |
-| Baseline | | 0.866 |
-  
-## Results for BART Detection
-
-## Methodologies for BERT
-
-  
-
-This section describes the methodology used in our experiments to extend the training of the multitask BERT model to the
-
-three tasks of paraphrase identification, sentiment classification, and semantic textual similarity.
-
-  
-
----
-
-  
-
-### POS and NER Tag Embeddings
-
-  
-
-Based on Bojanowski, et al. ([Enriching Word Vectors with Subword Information](https://arxiv.org/abs/1607.04606)), which showed that the
-
-addition of subword information to word embeddings can improve performance on downstream tasks, we extended our approach
-
-by incorporating Part-of-Speech (POS) and Named Entity Recognition (NER) tag embeddings into the input representation.
-
-The primary goal was to investigate whether the inclusion of linguistic information could lead to improved performance
-
-on the tasks.
-
-  
-
-#### Tagging
-
-  
-
-For the efficient and accurate tagging of POS and NER, we used the [spaCy](https://spacy.io/) library. The tagging
-
-process occurs during data preprocessing, where each sentence is tokenized into individual words. The spaCy pipeline is
-
-then invoked to annotate each word with its corresponding POS tag and NER label. The resulting tags and labels are
-
-subsequently converted into embeddings.
-
-  
-
-To increase training efficiency, we implemented a caching mechanism where the computed tag embeddings were stored and
-
-reused across multiple epochs.
-
-  
-
-#### Experimental Results
-
-  
-
-Contrary to our initial expectations, the inclusion of POS and NER tag embeddings did not yield the desired improvements
-
-across the three tasks. Experimental results indicated that the performance either remained stagnant or only slightly
-
-improved compared to the baseline BERT model without tag embeddings.
-
-  
-
-#### Impact on Training Process
-
-  
-
-An additional observation was the notable increase in training time when incorporating POS and NER tag embeddings. This
-
-extended training time was attributed to the additional computational overhead required for generating and embedding the
-
-tags.
-
-  
-
-#### Conclusion
-
-  
-
-Although the integration of POS and NER tag embeddings initially seemed promising, our experiments showed that this
-
-approach did not contribute significantly to the performance across the tasks. The training process was noticeably slowed down by the
-
-inclusion of tag embeddings.
-
-  
-
-As a result, we concluded that the benefits of incorporating POS and NER tags were not substantial enough to justify the
-
-extended training time. Future research could explore alternative ways of effectively exploiting linguistic features
-
-while minimising the associated computational overhead.
-
-  
-
-One possible explanation for the lack of performance improvements could be that the BERT model already encodes some
-
-syntactic information in its word
-
-embeddings. Hewitt and Manning ([A Structural Probe for Finding Syntax in Word Representations](https://aclanthology.org/N19-1419.pdf))
-
-showed that some syntactic information is already encoded in the word embeddings of pretrained BERT models, which could
-
-explain why the inclusion of POS and NER tags did not lead to performance improvements.
-
-  
-
----
-
-  
-
-### Sophia
-
-  
-
-We implemented the Sophia (**S**econd-**o**rder Cli**p**ped Stoc**h**astic Opt**i**miz**a**tion) optimizer completly
-
-from scratch, which is a second-order optimizer for language model pre-training. The paper promises convergence twice as
-
-fast as AdamW and better generalisation performance. It uses a light weight estimate of the diagonal of the Hessian
-
-matrix to approximate the curvature of the loss function. It also uses clipping to control the worst-case update size.
-
-By only updating the Hessian estimate every few iterations, the overhead is negligible.
-
-  
-
-The optimizer was introduced recently in the
-
-paper [Sophia: A Scalable Stochastic Second-order Optimizer for Language Model Pre-training](https://arxiv.org/abs/2305.14342).
-
-  
-
-#### Implementation
-
-  
-
-The paper describes the optimizer in detail, but does not provide any usable code. We implemented the optimizer from
-
-scratch in PyTorch. The optimizer is implemented in the [`optimizer.py`](optimizer.py) file and can be used in the
-
-multitask classifier by setting the `--optimizer` parameter.
-
-  
-
-There are two ways of estimating the Hessian. The first option is to use the Gauss-Newton-Bartlett approximation, which
-
-is computed using an average over the minibatch gradients. However, this estimator requires the existence of a
-
-multi-class classification problem from which to sample. This is not the case for some of our tasks, e.g. STS, which is
-
-a regression task. The estimator is still implemented as `SophiaG`.
-
-  
-
-The second option is to use Hutchinson's unbiased estimator of the Hessian diagonal by sampling from a spherical
-
-Gaussian distribution. This estimator is implemented as `SophiaH`. This estimator can be used for all tasks. It requires
-
-a Hessian vector product, which is implemented in most modern deep learning frameworks, including PyTorch.
-
-  
-
-#### Convergence
-
-  
-
-While the implementation of this novel optimizer was a challenge, in the end, we were able to implement it **successfully** and the model was able to train well. However, we did not observe any improvements in performance. The optimizer did
-
-not converge faster than AdamW, and the performance was comparable. This could be due to the fact that the optimizer was
-
-designed for pre-training language models, which is a different task to ours.
-
-  
-
-A more recent paper studing different training algorithms for transformer-based language
-
-models by Kaddour et al. ([No Train No Gain: Revisiting Efficient Training Algorithms For Transformer-based Language Models](https://arxiv.org/pdf/2307.06440.pdf))
-
-comes to the conclusion that the training algorithm gains vanish with a fully decayed learning rate. They show
-
-performance being about the same as the baseline (AdamW), which is what we observed.
-
-  
-
----
-
-  
-
-### Synthetic Data Augmentation
-
-  
-
-Given recent advances in imitation learning - in particular, the demonstrated ability of compact language models to emulate the performance of their larger, proprietary counterparts ([Alpaca: A Strong, Replicable Instruction-Following Model](https://crfm.stanford.edu/2023/03/13/alpaca.html)) - we investigated the impact of synthetic data in improving multitask classification models. Our focus lied on sentiment classification, where we were the weakest and had the fewest training examples.
-
-  
-
-#### LLM Generation
-
-  
-
-A custom small language model produced suboptimal data at the basic level, displaying instances beyond its distribution, and struggled to utilise the training data, resulting in unusual outputs.
-
-  
-
-We employed OpenAI's GPT-2 medium model variant ([Language Models are Unsupervised Multitask Learners](https://d4mucfpksywv.cloudfront.net/better-language-models/language-models.pdf)) and adapted it with a consistent learning rate using our sentiment classification training dataset. This modified model subsequently produced 100,000 training occurrences, which were ten times greater than the primary dataset. Although the produced illustrations were more significant to the context than the earlier technique, they still had infrequent coherence discrepancies.
-
-  
-
-For our third plan, we asked [GPT-4](https://arxiv.org/abs/2303.08774) to produce new examples.
-
-The data obtained from GPT-4 are of the highest quality. could only collect a restricted amount of data (~500 instances) due to ChatGPT's limitations and GPT-4's confidential nature.
-
-  
-
-#### Caution: Synthetic Data
-
-  
-
-OpenAI's GPT-2 and GPT-4, were trained on undisclosed datasets, posing potential concerns about data overlaps with our sentiment classification set. Even though these models are unlikely to reproduce particular test set instances, the concern remains and should be addressed.
-
-  
-
-#### Results with Synthetic Data
-
-  
-
-It's important to mention that our model didn't overfit on the training set, even after 30 epochs with 100.000 synthetic instances from GPT2. The methods used didn't improve the validation accuracy beyond what our best model already achieved. Additionally, performance worsened on the task with synthetic data.
-
-However, we believe that the synthetic data augmentation approach has potential and could be further explored in future research, especially with larger models like GPT-4.
-
-  
-
----
-
-  
-
-### Details
-
-  
-
-The first dataset we received for training was heavily unbalanced, with one set containing an order of magnitude more samples than the other. This imbalance can make models unfairly biased, often skewing results towards the majority class. Instead of using every available sample in each training epoch, which would be both time consuming and inefficient, we made modifications to the dataloader. In each epoch, we randomly select a fixed number of samples. This number was chosen to be 10.000, which is a good compromise between training time and performance.
-
-  
-
-<details>
-
-<summary>A lot more about the model architecture.</summary>
-
-  
-
-#### Classifier
-
-  
-
-The design and selection of classifiers are crucial in multi-task learning, especially when the tasks are deeply
-
-intertwined. The performance of one classifier can cascade its effects onto others, either enhancing the overall results
-
-or, conversely, dragging them down. In our endeavor, we dedicated significant time to experimentation, aiming to ensure
-
-not only the individual performance of each classifier but also their harmonious interaction within the multi-task
-
-setup.
-
-  
-
-Some of the components of our multitask classifier are described in more detail below. Each classifier's architecture is
-
-tailored to the unique characteristics of its task, enabling our multi-task learning framework to address multiple NLP
-
-challenges simultaneously.
-
-  
-
-##### Attention Layer
-
-  
-
-The attention mechanism plays a major role in capturing and emphasizing salient information within the output embeddings
-
-generated by the BERT model. We implemented
-
-an `AttentionLayer` ([Attention Is All You Need](https://arxiv.org/abs/1706.03762)) that accepts the last hidden state
-
-of the BERT output and applies a weighted sum mechanism to enhance the importance of certain tokens while suppressing
-
-others. This layer aids in creating a more focused representation of the input sentence, which is crucial for downstream
-
-tasks.
-
-  
-
-##### Sentiment Analysis Classifier
-
-  
-
-This classifier architecture consists of several linear layers that refine the BERT embeddings into logits corresponding
-
-to each sentiment class. These logits are then used to compute the predicted sentiment label. Achieving a balance here
-
-was crucial, as any inefficiencies could potentially impact the overall performance of our multi-task framework.
-
-  
-
-##### Paraphrase Detection Classifier
-
-  
-
-The paraphrase detection classifier uses a two-step process. First, the BERT embeddings for each input sentence are
-
-processed separately by a linear layer. We then compute the absolute difference and the absolute sum of these processed
-
-embeddings. These two concatenated features are then fed through additional linear layers to generate logits for
-
-paraphrase prediction. Iterative refinement was crucial here, ensuring that the classifier neither overshadowed nor was
-
-overshadowed by the other tasks.
-
-  
-
-##### Semantic Textual Similarity Estimator
-
-  
-
-For the Semantic Textual Similarity task, our approach relies on cosine similarity. The BERT embeddings for the input
-
-sentences are generated and then compared using cosine similarity. The resulting similarity score is scaled to range
-
-between 0 and 5, providing an estimate of how semantically similar the two sentences are.
-
-  
-
-#### Layer Unfreeze
-
-  
-
-Layer unfreezing is a technique employed during fine-tuning large pre-trained models like BERT. The idea behind
-
-this method is to gradually unfreeze layers of the model during the training process. Initially, the top layers are trained while the bottom layers are frozen. As training progresses, more layers are incrementally
-
-unfrozen, allowing for deeper layers of the model to be adjusted.
-
-  
-
-One of the motivations to use layer unfreezing is to prevent *catastrophic forgetting*—a phenomenon where the model
-
-rapidly forgets its previously learned representations when fine-tuned on a new
-
-task ([Howard and Ruder](https://arxiv.org/abs/1801.06146)). By incrementally unfreezing the layers, the hope is to
-
-preserve valuable pretrained representations in the earlier layers while allowing the model to adapt to the new task.
-
-  
-
-In our implementation, we saw a decrease in performance. One possible
-
-reason for this could be the interaction between the layer thaw schedule and the learning rate scheduler (plateau). As the
-
-learning rate scheduler reduced the learning rate, not all layers were yet unfrozen. This mismatch may have hindered
-
-the model's ability to make effective adjustments to the newly unfrozen layers. As a result, the benefits expected from the
-
-unfreezing layers may have been offset by this unintended interaction.
-
-  
-
-#### Mixture of Experts
-
-  
-
-Inspired by suggestions that GPT-4 uses a Mixture of Experts (MoE) structure, we also investigated the possibility of integrating MoE into our multitasking classification model. Unlike traditional, single-piece structures, the MoE design is made up of multiple of specialised "expert" sub-models, each adjusted to handle a different section of the data range.
-
-  
-
-Our use of the MoE model includes three expert sub-models, each using a independent BERT architecture. Also, we use a fourth BERT model for three-way classification, which acts as the gating mechanism for the group.
-
-Two types of gating were studied - Soft Gate, which employs a Softmax function to consider the contributions of each expert, and Hard Gate, which only permits the expert model with the highest score to affect the final prediction.
-
-  
-
-Despite the theoretical benefits of a MoE approach, our experimental findings did not result in any enhancements in performance over our top-performing standard models and we quickly abandoned the idea.
-
-  
-
-#### Automatic Mixed Precision
-
-  
-
-The automatic mixed precision (AMP) feature of PyTorch was used to speed up training and reduce memory usage. This feature changes the precision of the model's weights and activations during training. The model was trained in `bfloat16` precision, which is a fast 16-bit floating point format. The AMP feature of PyTorch automatically casts the model parameters. This reduces the memory usage and speeds up training.
-
-  
-
-</details>
-
-
-## Experiments for BERT
-
-We used the default datasets provided for training and validation with no modifications.
-
-The baseline for our comparisons includes most smaller improvements to the BERT model listed above. The baseline model is further described in the [Results](#results) section. The baseline model was trained for 10 epochs at 10.000 samples per epoch. 
-
-
-The models were trained and evaluated on the Grete cluster. The training was done on a single A100 GPU. The training time for the baseline model was approximately 1 hour.
-
-We used [Ray Tune](https://docs.ray.io/en/latest/tune/index.html) to perform hyperparameter tuning. This allowed us to efficiently explore the hyperparameter space and find the best hyperparameters for our model. We used [Optuna](https://docs.ray.io/en/latest/tune/api/doc/ray.tune.search.optuna.OptunaSearch.html) to search the hyperparameter space and [AsyncHyperBandScheduler](https://docs.ray.io/en/latest/tune/api/doc/ray.tune.schedulers.AsyncHyperBandScheduler.html) as the scheduler. The hyperparameters were searched for the whole model, not for each task individually. This was done to avoid overfitting to a single task. We searched for hyperparameters trying to minimize the overfitting of the model to the training data.
-
-  
-
-<div align="center"><img src="https://media.discordapp.net/attachments/1146522094067269715/1146523064763437096/image.png?width=1440&height=678" alt="Hyperparameter Search to find a baseline" width="600"/></div>
-
-  
-
-The trained models were evaluated on the validation set. The best model was selected based on the validation results ('dev'). The metrics used for the evaluation were accuracy only for paraphrase identification and sentiment classification, and Pearson correlation for semantic textual similarity.
-
-
 ## Contributors
 
 
@@ -951,47 +632,6 @@ The trained models were evaluated on the validation set. The best model was sele
 | Classifier Model | Repository  | | Synthetic Data  |
 
   
-
-### Grete Cluster
-
-  
-To run the multitask classifier on the Grete cluster you can use the `run_train.sh` script. You can change the
-
-parameters in the script to your liking. To submit the script use
-
-  
-for BERT
-
-
-````sh
-
-sbatch run_train.sh
-
-````
-
-
-for BART Detection
-
-  
-````sh
-
-sbatch run_bart_detection.sh
-
-````
-
-
-To check on your job you can use the following command
-
-
-```sh
-
-squeue --me
-
-```
-
-The logs of your job will be saved in the `slurm_files` directory. The best model will be saved in the `models` directory.
-
-
 ## AI-Usage Card
 
 

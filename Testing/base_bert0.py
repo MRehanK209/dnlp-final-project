@@ -30,7 +30,23 @@ class BertPreTrainedModel(nn.Module):
         self.apply(self._init_weights)
 
     def _init_weights(self, module):
-        """Initialize the weights"""
+        if isinstance(module, nn.Linear):
+            if self.config.hidden_act == "gelu":
+                nn.init.xavier_uniform_(module.weight)
+            else:
+                nn.init.kaiming_normal_(module.weight, mode='fan_in', nonlinearity='relu')
+            if module.bias is not None:
+                module.bias.data.zero_()
+        elif isinstance(module, nn.Embedding):
+             #Consider loading pre-trained embeddings here if applicable
+            nn.init.trunc_normal_(module.weight, mean=0.0, std=self.config.initializer_range, a=-2*self.config.initializer_range, b=2*self.config.initializer_range)
+        elif isinstance(module, nn.LayerNorm):
+            module.bias.data.zero_()
+            module.weight.data.fill_(1.0)
+
+
+    """def _init_weights(self, module):
+        #"""Initialize the weights"""
         if isinstance(module, (nn.Linear, nn.Embedding)):
             # Slightly different from the TF version which uses truncated_normal for initialization
             # cf https://github.com/pytorch/pytorch/pull/5617
@@ -41,6 +57,12 @@ class BertPreTrainedModel(nn.Module):
         if isinstance(module, nn.Linear) and module.bias is not None:
             module.bias.data.zero_()
 
+            # Additional initialization for POS and NER embedding layers if they are defined
+        if hasattr(module, 'pos_tag_embedding'):
+            module.pos_tag_embedding.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+        if hasattr(module, 'ner_tag_embedding'):
+            module.ner_tag_embedding.weight.data.normal_(mean=0.0, std=self.config.initializer_range)"""
+            
     @property
     def dtype(self) -> dtype:
         return get_parameter_dtype(self)

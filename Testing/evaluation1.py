@@ -17,8 +17,12 @@ explicitly aside from model_eval_multitask.
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from sklearn.metrics import precision_score, recall_score, f1_score
+
+
 
 from datasets import (
     SentenceClassificationDataset,
@@ -58,6 +62,7 @@ def model_eval_multitask(
                 b_mask1 = b_mask1.to(device)
                 b_ids2 = b_ids2.to(device)
                 b_mask2 = b_mask2.to(device)
+                
 
                 logits = model.predict_paraphrase(b_ids1, b_mask1, b_ids2, b_mask2)
                 y_hat = logits.sigmoid().round().flatten().cpu().numpy()
@@ -69,8 +74,14 @@ def model_eval_multitask(
 
         if task == "qqp" or task == "multitask":
             quora_accuracy = np.mean(np.array(quora_y_pred) == np.array(quora_y_true))
+            #quora_precision = precision_score(torch.tensor(quora_y_true), torch.tensor(quora_y_pred))
+            #quora_recall = recall_score(torch.tensor(quora_y_true), torch.tensor(quora_y_pred))
+            #quora_f1 = f1_score(torch.tensor(quora_y_true), torch.tensor(quora_y_pred))
         else:
             quora_accuracy = None
+            #quora_precision = None
+            #quora_recall = None
+            #quora_f1 = None
 
         sts_y_true = []
         sts_y_pred = []
@@ -181,6 +192,9 @@ def model_eval_multitask(
 
         if task == "qqp" or task == "multitask":
             print(f"Paraphrase detection accuracy: {quora_accuracy:.3f}")
+            #print(f"Paraphrase detection presicion: {quora_precision:.3f}")
+            #print(f"Paraphrase detection recall: {quora_recall:.3f}")
+            #print(f"Paraphrase detection F1_Score: {quora_f1:.3f}")
         if task == "sst" or task == "multitask":
             print(f"Sentiment classification accuracy: {sst_accuracy:.3f}")
         if task == "sts" or task == "multitask":
@@ -214,6 +228,7 @@ def model_eval_test_multitask(
 
     with torch.no_grad():
         quora_y_pred = []
+        quora_y_true = []
         quora_sent_ids = []
         # Evaluate paraphrase detection.
         if task == "qqp" or task == "multitask":
@@ -231,10 +246,12 @@ def model_eval_test_multitask(
                 b_ids2 = b_ids2.to(device)
                 b_mask2 = b_mask2.to(device)
 
-                logits = model.predict_paraphrase(b_ids1, b_mask1, b_ids2, b_mask2)
+                logits = model.predict_paraphrase(b_ids1, b_mask1, b_ids2, b_mask2)[2]
                 y_hat = logits.sigmoid().round().flatten().cpu().numpy()
+                b_labels = b_labels.flatten().cpu().numpy()
 
                 quora_y_pred.extend(y_hat)
+                quora_y_true.extend(b_labels)
                 quora_sent_ids.extend(b_sent_ids)
 
         sts_y_pred = []

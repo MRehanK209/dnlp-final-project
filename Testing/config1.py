@@ -186,7 +186,6 @@ class PretrainedConfig(object):
 
         return config_dict, kwargs
 
-
 class BertConfig(PretrainedConfig):
     model_type = "bert"
 
@@ -201,6 +200,8 @@ class BertConfig(PretrainedConfig):
         hidden_dropout_prob=0.1,
         attention_probs_dropout_prob=0.1,
         max_position_embeddings=512,
+        num_pos_tags=45,  # Number of unique POS tags, set a default value
+        num_ner_tags=18,  # Number of unique NER tags, set a default value
         type_vocab_size=2,
         initializer_range=0.02,
         layer_norm_eps=1e-12,
@@ -226,4 +227,6 @@ class BertConfig(PretrainedConfig):
         self.layer_norm_eps = layer_norm_eps
         self.gradient_checkpointing = gradient_checkpointing
         self.position_embedding_type = position_embedding_type
-        self.use_cache = use_cache
+        self.use_cache = use_cache  
+        self.num_pos_tags = num_pos_tags  # Added parameter for POS tags
+        self.num_ner_tags = num_ner_tags  # Added parameter for NER tags

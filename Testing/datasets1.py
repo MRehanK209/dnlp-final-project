@@ -9,7 +9,7 @@ to train your model.
 
 
 import csv
-
+import random
 import torch
 from torch.utils.data import Dataset
 
@@ -105,6 +105,22 @@ class SentenceClassificationTestDataset(Dataset):
 
 
 class SentencePairDataset(Dataset):
+    def __init__(self, dataset, args, isRegression=False, mask_prob=0.15):
+        self.dataset = dataset
+        self.p = args
+        self.isRegression = isRegression
+        self.mask_prob = mask_prob
+        self.tokenizer = BertTokenizer.from_pretrained(
+            "bert-base-uncased", local_files_only=args.local_files_only
+        )
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        return self.dataset[idx]
+
+class SentencePairDataset(Dataset):
     def __init__(self, dataset, args, isRegression=False):
         self.dataset = dataset
         self.p = args
@@ -125,8 +141,8 @@ class SentencePairDataset(Dataset):
         labels = [x[2] for x in data]
         sent_ids = [x[3] for x in data]
 
-        encoding1 = self.tokenizer(sent1, return_tensors="pt", padding=True, truncation=True)
-        encoding2 = self.tokenizer(sent2, return_tensors="pt", padding=True, truncation=True)
+        encoding1 = self.tokenizer(sent1, return_tensors="pt", padding=True, truncation=True, max_length=512)
+        encoding2 = self.tokenizer(sent2, return_tensors="pt", padding=True, truncation=True, max_length=512)
 
         token_ids = torch.LongTensor(encoding1["input_ids"])
         attention_mask = torch.LongTensor(encoding1["attention_mask"])
@@ -175,6 +191,7 @@ class SentencePairDataset(Dataset):
         }
 
         return batched_data
+   
 
 
 class SentencePairTestDataset(Dataset):

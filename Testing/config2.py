@@ -186,20 +186,19 @@ class PretrainedConfig(object):
 
         return config_dict, kwargs
 
-
 class BertConfig(PretrainedConfig):
     model_type = "bert"
 
     def __init__(
         self,
         vocab_size=30522,
-        hidden_size=768,
-        num_hidden_layers=12,
-        num_attention_heads=12,
-        intermediate_size=3072,
-        hidden_act="gelu",
-        hidden_dropout_prob=0.1,
-        attention_probs_dropout_prob=0.1,
+        hidden_size=1024,  # Increased hidden size
+        num_hidden_layers=24,  # Increased layers
+        num_attention_heads=16,  # More attention heads
+        intermediate_size=4096,  # Larger intermediate size
+        hidden_act="gelu",  # Swish activation for better performance on certain tasks
+        hidden_dropout_prob=0.3,  # Adjusted dropout for better regularization
+        attention_probs_dropout_prob=0.3,
         max_position_embeddings=512,
         type_vocab_size=2,
         initializer_range=0.02,
@@ -208,6 +207,15 @@ class BertConfig(PretrainedConfig):
         gradient_checkpointing=False,
         position_embedding_type="absolute",
         use_cache=True,
+        similarity_threshold=0.8,  # New parameter for paraphrase detection
+        learning_rate=2e-5,  # Fine-tuning learning rate
+        num_train_epochs=5,  # Number of fine-tuning epochs
+        batch_size=32,  # Batch size for fine-tuning
+        #use_cross_attention=True,  # Enabling cross-attention
+        #custom_loss="SMARTLoss", 
+        smart_num_steps= 5, # New option for custom loss function
+        smart_step_size= 1e-3,
+        smart_epsilon=1e-6,
         **kwargs,
     ):
         super().__init__(pad_token_id=pad_token_id, **kwargs)
@@ -227,3 +235,14 @@ class BertConfig(PretrainedConfig):
         self.gradient_checkpointing = gradient_checkpointing
         self.position_embedding_type = position_embedding_type
         self.use_cache = use_cache
+        
+        # Paraphrase detection specific parameters
+        self.similarity_threshold = similarity_threshold
+        self.learning_rate = learning_rate
+        self.num_train_epochs = num_train_epochs
+        self.batch_size = batch_size
+        #self.use_cross_attention = use_cross_attention
+        #self.custom_loss = custom_loss
+        self.smart_num_steps = smart_num_steps  # Default value for smart_num_steps
+        self.smart_step_size = smart_step_size  # Default value for smart_step_size
+        self.smart_epsilon = smart_epsilon  # Default value for smart_epsilon     

@@ -7,6 +7,7 @@ import re
 import unicodedata
 from collections import OrderedDict, UserDict
 from contextlib import contextmanager
+import sentencepiece as spm
 from enum import Enum
 from typing import (
     Any,
@@ -2093,7 +2094,7 @@ class PreTrainedTokenizer(PreTrainedTokenizerBase):
         self.added_tokens_encoder: Dict[str, int] = {}
         self.added_tokens_decoder: Dict[int, str] = {}
         self.unique_no_split_tokens: List[str] = []
-
+        self.sp = spm.SentencePieceProcessor()
     @property
     def is_fast(self) -> bool:
         return False
@@ -2306,6 +2307,7 @@ class PreTrainedTokenizer(PreTrainedTokenizerBase):
         no_split_token = self.unique_no_split_tokens
         tokenized_text = split_on_tokens(no_split_token, text)
         return tokenized_text
+    
 
     def _tokenize(self, text, **kwargs):
         """
@@ -2313,6 +2315,8 @@ class PreTrainedTokenizer(PreTrainedTokenizerBase):
         vocabulary or sub-words for sub-word-based vocabularies (BPE/SentencePieces/WordPieces).
         Do NOT take care of added tokens.
         """
+        tokens = self.sp.encode(text, out_type=str)  # Get tokens as strings
+        return tokens
         raise NotImplementedError
 
     def convert_tokens_to_ids(self, tokens: Union[str, List[str]]) -> Union[int, List[int]]:

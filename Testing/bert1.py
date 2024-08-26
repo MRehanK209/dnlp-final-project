@@ -8,6 +8,7 @@ from base_bert import BertPreTrainedModel
 from utils import get_extended_attention_mask
 
 
+
 class BertSelfAttention(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -85,6 +86,7 @@ class BertLayer(nn.Module):
         super().__init__()
         # multi-head attention
         self.self_attention = BertSelfAttention(config)
+        #self.cross_attention = BertCrossAttention(config)
         # add-norm
         self.attention_dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.attention_layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
@@ -118,7 +120,7 @@ class BertLayer(nn.Module):
         normalized_output = ln_layer(residual_output)
         return normalized_output
 
-    def forward(self, hidden_states, attention_mask):
+    def forward(self, hidden_states, attention_mask, cross_attention_mask=None):
         """
         A single pass of the bert layer.
 
@@ -132,20 +134,26 @@ class BertLayer(nn.Module):
         3. a feed forward layer
         4. a add-norm that takes the input and output of the feed forward layer
         """
-        # Step 1: Multi-Head Attention
+        # Step 1: Multi-Head Self Attention
         self_attention_output = self.self_attention(hidden_states, attention_mask)
-        
-        # Step 2: Apply Add-Norm after Multi-Head Attention
+        # Step 1.5: Multi-Head Cross Attention
+        #self_cross_attention_output = self.cross_attention(self_attention_output,hidden_states, attention_mask)
+         #Step 2: Apply Add-Norm after Multi-Head Attention
         attention_output = self.add_norm(hidden_states, self_attention_output, self.attention_dense,
                                         self.attention_dropout, self.attention_layer_norm)
-        
+        #attention_output = self.attention_dense(self_cross_attention_output)
+        #attention_output = self.attention_layer_norm(attention_output + hidden_states)
+        #attention_output = self.attention_dropout(attention_output)
         # Step 3: Feed Forward Layer
         intermediate_output = self.interm_af(self.interm_dense(attention_output))
         
         # Step 4: Apply Add-Norm after Feed Forward Layer
-        layer_output = self.add_norm(attention_output, intermediate_output, self.out_dense,
-                                    self.out_dropout, self.out_layer_norm)
-        
+        #layer_output = self.add_norm(attention_output, intermediate_output, self.out_dense,
+                                    #self.out_dropout, self.out_layer_norm)
+        # Add-norm
+        output = self.out_dense(intermediate_output)
+        output = self.out_layer_norm(output + attention_output)
+        layer_output = self.out_dropout(output)
         return layer_output
 
 
@@ -157,6 +165,7 @@ class BertModel(BertPreTrainedModel):
     2. a stack of n bert layers (used in self.encode)
     3. a linear transformation layer for [CLS] token (used in self.forward, as given)
     """
+
 
     def __init__(self, config):
         super().__init__(config)
@@ -231,6 +240,7 @@ class BertModel(BertPreTrainedModel):
 
         return hidden_states
 
+
     def forward(self, input_ids, attention_mask):
         """
         input_ids: [batch_size, seq_len], seq_len is the max length of the batch
@@ -238,7 +248,6 @@ class BertModel(BertPreTrainedModel):
         """
         # get the embedding for each input token
         embedding_output = self.embed(input_ids=input_ids)
-
         # feed to a transformer (a stack of BertLayers)
         sequence_output = self.encode(embedding_output, attention_mask=attention_mask)
 
@@ -248,3 +257,4 @@ class BertModel(BertPreTrainedModel):
         first_tk = self.pooler_af(first_tk)
 
         return {"last_hidden_state": sequence_output, "pooler_output": first_tk}
+

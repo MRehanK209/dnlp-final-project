@@ -3,7 +3,7 @@ import sys
 import torch
 
 sys.path.append("../")
-from bert import BertModel
+from bert1 import BertModel
 
 """
 This script tests the correct functionality of the BERT model by comparing the output of

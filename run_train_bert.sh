@@ -31,4 +31,4 @@ echo "Latest Commit: $(git rev-parse --short HEAD)"
 echo -e "Uncommitted Changes: $(git status --porcelain | wc -l)\n"
 
 # Run the script:
-python -u multitask_classifier.py --local_files_only --option finetune --task qqp --hidden_dropout_prob 0.3 --epoch 10 --use_gpu
+python -u multitask_classifier.py --local_files_only --option finetune --task qqp --batch_size 64 --epoch 25 --lr 1e-5 --use_gpu

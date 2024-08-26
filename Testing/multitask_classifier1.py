@@ -13,20 +13,22 @@ import torch.nn.functional as F
 from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-
 from bert import BertModel
+from smart_pytorch import SMARTLoss, kl_loss, sym_kl_loss
+from torch.nn import Module
 from datasets import (
     SentenceClassificationDataset,
     SentencePairDataset,
     load_multitask_data,
 )
 from evaluation import model_eval_multitask, test_model_multitask
-from optimizer import AdamW
 from optimizer_sphia import SophiaG
-
+from optimizer import AdamW
+from torch.optim.lr_scheduler import ReduceLROnPlateau, OneCycleLR, CosineAnnealingWarmRestarts, CosineAnnealingLR
 TQDM_DISABLE = True
 
+
+# fix the random seed
 def seed_everything(seed=11711):
     random.seed(seed)
     np.random.seed(seed)
@@ -39,6 +41,42 @@ def seed_everything(seed=11711):
 
 BERT_HIDDEN_SIZE = 768
 N_SENTIMENT_CLASSES = 5
+
+
+class FocalLoss_LabelSmoothing(nn.Module):
+    def __init__(self, alpha=0.25, gamma=2.0, from_logits=True, label_smoothing=0.0, reduction='mean'):
+        super(FocalLoss_LabelSmoothing, self).__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.from_logits = from_logits
+        self.label_smoothing = label_smoothing
+        self.reduction = reduction
+
+    def forward(self, y_pred, y_true):
+        if self.label_smoothing > 0:
+            y_true = y_true * (1 - self.label_smoothing) + 0.5 * self.label_smoothing
+        
+        if self.from_logits:
+            bce_loss = F.binary_cross_entropy_with_logits(y_pred, y_true, reduction='none')
+            y_pred = torch.sigmoid(y_pred)  # Convert logits to probabilities
+        else:
+            bce_loss = F.binary_cross_entropy(y_pred, y_true, reduction='none')
+        
+        # Compute the modulating factor based on gamma
+        p_t = y_true * y_pred + (1 - y_true) * (1 - y_pred)
+        alpha_factor = y_true * self.alpha + (1 - y_true) * (1 - self.alpha)
+        focal_weight = alpha_factor * (1 - p_t) ** self.gamma
+        
+        # Apply the focal loss adjustment
+        loss = focal_weight * bce_loss
+        
+        # Apply the reduction method
+        if self.reduction == 'mean':
+            return loss.mean()
+        elif self.reduction == 'sum':
+            return loss.sum()
+        else:
+            return loss
 
 
 def smoothness_inducing_loss(model, input_ids_1, attention_mask_1, input_ids_2, attention_mask_2, labels, criterion, epsilon=1e-8, lambda_reg=0.01):
@@ -66,7 +104,7 @@ def smoothness_inducing_loss(model, input_ids_1, attention_mask_1, input_ids_2, 
 
     # Get the pooled output (usually the output corresponding to the [CLS] token)
     # Reshape labels to match the shape of the outputs
-    labels = labels.float() # Add an extra dimension
+    labels = labels.float().unsqueeze(1)  # Add an extra dimension
 
     # Calculate the original loss
     original_loss = criterion(original_logits, labels.float())
@@ -82,10 +120,16 @@ def smoothness_inducing_loss(model, input_ids_1, attention_mask_1, input_ids_2, 
 
 
 
+def bregman_proximal_point_update(optimizer, model, original_params, eta=1e-5):
+
+    # Apply the Bregman proximal point update
+    with torch.no_grad():
+        for param, original_param in zip(model.parameters(), original_params):
+            param.copy_(param - eta * (param - original_param))
+
 class MultitaskBERT(nn.Module):
     """
     This module should use BERT for these tasks:
-
     - Sentiment classification (predict_sentiment)
     - Paraphrase detection (predict_paraphrase)
     - Semantic Textual Similarity (predict_similarity)
@@ -94,7 +138,7 @@ class MultitaskBERT(nn.Module):
 
     def __init__(self, config):
         super(MultitaskBERT, self).__init__()
-
+       
         self.bert = BertModel.from_pretrained(
             "bert-base-uncased", local_files_only=config.local_files_only
         )
@@ -113,6 +157,7 @@ class MultitaskBERT(nn.Module):
 
         #QQP    
         self.paraphrase_classifier = nn.Linear(self.bert.config.hidden_size * 2, 1)
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, input_ids, attention_mask):
         """Takes a batch of sentences and produces embeddings for them."""
@@ -131,19 +176,15 @@ class MultitaskBERT(nn.Module):
         pooled_output = self.forward(input_ids, attention_mask)
         logits = self.sst_classifier(pooled_output)
         return logits
+    
 
     def predict_paraphrase(self, input_ids_1, attention_mask_1, input_ids_2, attention_mask_2):
-        """
-        Given a batch of pairs of sentences, outputs a single logit for predicting whether they are paraphrases.
-        Note that your output should be unnormalized (a logit); it will be passed to the sigmoid function
-        during evaluation, and handled as a logit by the appropriate loss function.
-        Dataset: Quora
-        """
         embeddings_1 = self.forward(input_ids_1, attention_mask_1)
         embeddings_2 = self.forward(input_ids_2, attention_mask_2)
         concatenated = torch.cat((embeddings_1, embeddings_2), dim=1)
         logits = self.paraphrase_classifier(concatenated)
-        return logits.squeeze()
+        return logits
+
 
     def predict_similarity(self, input_ids_1, attention_mask_1, input_ids_2, attention_mask_2):
         """
@@ -286,8 +327,13 @@ def train_multitask(args):
     model = model.to(device)
 
     lr = args.lr
-    optimizer = AdamW(model.parameters(), lr=1e-4)
+    optimizer = AdamW(model.parameters(), lr=1e-5, weight_decay=0.0)
     #scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.8, patience=5, threshold=0.01, min_lr=1e-11, verbose=True)
+    # Initialize the OneCycleLR scheduler
+    #scheduler = OneCycleLR(optimizer, max_lr=1e-2, steps_per_epoch=len(quora_train_dataloader), epochs=args.epochs)
+    #scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2)  # T_0 is the initial restart period
+    #scheduler = CosineAnnealingLR(optimizer, T_max=50)
+
     best_dev_acc = float("-inf")
 
     # Run for the specified number of epochs
@@ -353,20 +399,25 @@ def train_multitask(args):
                 train_loss += loss.item()
                 num_batches += 1
 
-
         if args.task == "qqp" or args.task == "multitask":
-            # Train the model on the qqp dataset.
-            for batch in tqdm(
-                    quora_train_dataloader, desc=f"train-{epoch + 1:02}", disable=TQDM_DISABLE
-            ):
+    # Train the model on the QQP dataset.
+            all_pred = []
+            all_labels = []
+            train_loss = 0.0
+            num_batches = 0
+            # Save the original parameters before starting the epoch
+            original_params = [param.clone().detach() for param in model.parameters()]
+
+            for batch in tqdm(quora_train_dataloader, desc=f"train-{epoch + 1:02}", disable=TQDM_DISABLE):
                 b_ids_1, b_mask_1, b_ids_2, b_mask_2, b_labels = (
                     batch["token_ids_1"],
                     batch["attention_mask_1"],
                     batch["token_ids_2"],
                     batch["attention_mask_2"],
                     batch["labels"],
-                )
+        )
 
+                # Move tensors to the correct device
                 b_ids_1 = b_ids_1.to(device)
                 b_mask_1 = b_mask_1.to(device)
                 b_ids_2 = b_ids_2.to(device)
@@ -374,26 +425,33 @@ def train_multitask(args):
                 b_labels = b_labels.to(device)
 
                 optimizer.zero_grad()
-                logits = model.predict_paraphrase(b_ids_1, b_mask_1, b_ids_2, b_mask_2)
-                #pos_weight = torch.tensor([1.7]).to(device)
-                #criterion=F.binary_cross_entropy_with_logits
-                loss = F.binary_cross_entropy_with_logits(logits, b_labels.float())
-                """loss = smoothness_inducing_loss(model,input_ids_1=b_ids_1, attention_mask_1=b_mask_1, 
+
+            # Forward pass
+            logits = model.predict_paraphrase(input_ids_1=b_ids_1, attention_mask_1=b_mask_1, input_ids_2=b_ids_2, attention_mask_2=b_mask_2).to(device)
+            #criterion_normal = F.binary_cross_entropy_with_logits
+            criterion_LabelSmoothing= FocalLoss_LabelSmoothing(alpha=0.1, gamma=3, label_smoothing=0.09)
+            #loss=F.binary_cross_entropy_with_logits(logits, b_labels.float().unsqueeze(1))
+            # Compute loss
+            loss = smoothness_inducing_loss(model,input_ids_1=b_ids_1, attention_mask_1=b_mask_1, 
                     input_ids_2=b_ids_2, attention_mask_2=b_mask_2,
                     labels=b_labels,
-                    criterion=criterion,
+                    criterion=criterion_LabelSmoothing,
                     epsilon=1e-8,
                     lambda_reg=1e-6
-            )"""
-                loss.to(device)
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
-                optimizer.step()
+            )
+            loss.to(device)
+            # Backward pass and optimization
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
+            optimizer.step()
+            # Bregman Proximal Point Update
+            #bregman_proximal_point_update(optimizer, model, original_params, eta=1e-5)
+            # Track training loss
+            train_loss += loss.item()
+            num_batches += 1
 
-                train_loss += loss.item()
-                num_batches += 1
 
-        train_loss = train_loss / num_batches
+        train_loss = train_loss / num_batches  # Average loss per batch
 
         quora_train_acc, _, _, sst_train_acc, _, _, sts_train_corr, _, _, etpc_train_acc, _, _ = (
             model_eval_multitask(
@@ -430,13 +488,16 @@ def train_multitask(args):
         print(
             f"Epoch {epoch+1:02} ({args.task}): train loss :: {train_loss:.3f}, train :: {train_acc:.3f}, dev :: {dev_acc:.3f}"
         )
-        #scheduler.step(quora_dev_acc)
+        
+        #scheduler.step()#for cosinelr
+        #scheduler.step(quora_dev_acc)#for plateu
+        #scheduler.step(epoch + num_batches / len(quora_train_dataloader)) #cosinewarmup
         if dev_acc > best_dev_acc:
             best_dev_acc = dev_acc
             save_model(model, optimizer, args, config, args.filepath)
         # Print current learning rate for monitoring
-        #for param_group in optimizer.param_groups:
-            #print(f"Current learning rate: {param_group['lr']}")
+        for param_group in optimizer.param_groups:
+            print(f"Current learning rate: {param_group['lr']}")
 
 def test_model(args):
     with torch.no_grad():
@@ -475,6 +536,13 @@ def get_args():
         default="pretrain",
     )
     parser.add_argument("--use_gpu", action="store_true")
+
+    #args, _ = parser.parse_known_args()
+
+    # New SMART loss related hyperparameters
+    parser.add_argument("--smart_num_steps", type=int, default=5, help="Number of steps for SMART loss")
+    parser.add_argument("--smart_step_size", type=float, default=1e-3, help="Step size for SMART loss")
+    parser.add_argument("--smart_epsilon", type=float, default=1e-6, help="Epsilon for SMART loss")
 
     args, _ = parser.parse_known_args()
 
@@ -580,7 +648,7 @@ def get_args():
 
     # Hyperparameters
     parser.add_argument("--batch_size", help="sst: 64 can fit a 12GB GPU", type=int, default=64)
-    parser.add_argument("--hidden_dropout_prob", type=float, default=0.1)
+    parser.add_argument("--hidden_dropout_prob", type=float, default=0.3)
     parser.add_argument(
         "--lr",
         type=float,

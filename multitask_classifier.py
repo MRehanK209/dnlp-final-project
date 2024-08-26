@@ -13,6 +13,7 @@ import torch.nn.functional as F
 from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from bert import BertModel
 from datasets import (
@@ -22,6 +23,7 @@ from datasets import (
 )
 from evaluation import model_eval_multitask, test_model_multitask
 from optimizer import AdamW
+from optimizer_sphia import SophiaG
 
 TQDM_DISABLE = True
 

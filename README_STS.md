@@ -30,6 +30,6 @@ We attempted to scale the similarity scores from the original range of 0 to 5 do
 We experimented with modifying the BERT architecture by adding additional dense layers on top of the BERT embeddings. The goal was to enhance the model's capacity to capture complex relationships between sentences. However, this approach not only failed to improve the results but also significantly increased the computational cost, making it less feasible for practical applications.
 
 ### Conclusion:
-Although our experiments did not yield improvements in performance, they provided valuable insights suggesting that more sophisticated techniques or task-specific adaptations might be necessary for meaningful gains. We also experimented with MT-DNN, but it did not work properly and failed to provide usable results. Despite the lack of improvement, these experiments offered valuable insights that could guide future research and optimization efforts.
+Although our experiments did not yield improvements in performance, they provided valuable insights suggesting that more sophisticated techniques or task-specific adaptations might be necessary for meaningful gains. We also experimented with MT-DNN, but it did not work properly and failed to provide usable results. Data Augmentation with Back-Translation was also attempted but did not yield to satisfying results. Despite the lack of improvement, these experiments offered valuable insights that could guide future research and optimization efforts.
 
 ---

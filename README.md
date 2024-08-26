@@ -151,7 +151,7 @@ Train Acc: Training Accuracy
 | 6   | 10 | 8e-5 | None  | 0.1 | 3   | 0.09| 1e-2 | 1e-6   | AdamW| 0    | L2   | 32 | 0.1| 6h    | 70.6%   | 72.5%     |
 | 7   | 5  | 3e-5 | None  | N/A | N/A | N/A | 1e-4 | 1e-6  | AdamW| 0    | L2   | 32  | 0.1| 3h 05m| 75.5%   | 77.9%     |
 | 8   | 10 | 8e-5 | None  | N/A | N/A | N/A | 1e-6 | 1e-10  | AdamW| 0    | L2   | 32 | 0.1| 7h    | 77.8%   | 79.4%     |
-| 9  | 20 | 8e-5 | None  | 0.2 | 2   | 0.1 | 1e-5 | 1e-8  | AdamW| 0.01 | None  | 64| 0.3| 5h 30m| 85.2%     | 90.0%    |
+| 9  | 20 | 1e-5 | None  | none | none   | none | None | None  | AdamW| 0.01 | None  | 64| 0.1| 4h 30m| 79.0%     | 99.6%    |
 
 
 \[
@@ -209,8 +209,8 @@ Train Acc: Training Accuracy
    - **Configuration**:
      - Epochs: 10, Learning Rate: 8e-5, Alpha: 0.1, Gamma: 3, Label Smoothing Factor: 0.09, Lambda: 1e-2, Delta: 1e-6, Optimizer: AdamW, Weight Decay: 0, Batch Size: 32, Dropout: 0.1
    - **Results**: Dev Accuracy: 70.6%, Train Accuracy: 72.5%
-   -**Comlication**: The Batch Size: 64 raises the 'out of memory' error. Batch Size: 32 works but takes almost double the time, I had to cut short the epoch in the middle of the task.
-   - **Discussion**: This setup demonstrated a balance between training and validation accuracies, indicating improved stability and robustness when using combined regularization techniques. But to incorporate L2 regularisation I might have to complexify the loss function a little as the val acc drops.
+   -**Complication**: The Batch Size: 64 raises the 'out of memory' error. Batch Size: 32 works but takes almost double the time, I had to cut short the epoch in the middle of the task.
+   - **Discussion**: This setup demonstrated a balance between training and validation accuracies, indicating improved stability and robustness when using combined regularization techniques. But to incorporate L2 regularisation I might have complexity the loss function a little as the val acc drops.
 
 8. **Experiment 7**:
    - **Goal**: To simplify the loss function with a not-so-aggressive regularisation.
@@ -232,7 +232,7 @@ Train Acc: Training Accuracy
     - **Goal**: Try to get to get as much as possible by the time left.
     - **Configuration**:
       - Epochs: 25, Learning Rate: Schedular ReduceLROnPlateau(with factor 0.8), Alpha: 0.0, Gamma: 0, Label Smoothing Factor: 0, Lambda: 0, Delta: 0, Optimizer: AdamW, Weight Decay: 0.01, Batch Size: 64, Dropout: 0.1
-    - **Results**: Dev Accuracy: 79.0%, Train Accuracy: 99.4%
+    - **Results**: Dev Accuracy: 79.0%, Train Accuracy: 99.4%. This can be replicated with the simple model with lr=1e-5 with 20 epochs or so.
     - **Discussion**: Due to the time consumption, with not much time left I get back to the simple model and rely on the learning rate to give the best result it could. I use here the This configuration achieved the highest validation accuracy, but there, the overfitting problem has risen in the absence of regularization.
 
 ### Complications: 

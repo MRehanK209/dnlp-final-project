@@ -104,7 +104,7 @@ class MultitaskBERT(nn.Module):
                 param.requires_grad = True
 
         # STS
-        self.sts_classifier = nn.Linear(self.bert.config.hidden_size * 2, 1)
+        self.sts_classifier = nn.Linear(self.bert.config.hidden_size * 2, 1) 
 
         # SST with Custom Layers
         self.sst_shortcut = nn.Linear(self.bert.config.hidden_size, 5)
@@ -162,6 +162,7 @@ class MultitaskBERT(nn.Module):
         it will be handled as a logit by the appropriate loss function.
         Dataset: STS
         """
+        
         embeddings_1 = self.forward(input_ids_1, attention_mask_1)
         embeddings_2 = self.forward(input_ids_2, attention_mask_2)
         combined_embeddings = torch.cat((embeddings_1, embeddings_2), dim=1)
@@ -236,7 +237,7 @@ def train_multitask(args):
             batch_size=args.batch_size,
             collate_fn=sst_dev_data.collate_fn,
         )
-        # STS dataset
+    # STS dataset
     if args.task == "sts" or args.task == "multitask":
         sts_train_data = SentencePairDataset(sts_train_data, args)
         sts_dev_data = SentencePairDataset(sts_dev_data, args)

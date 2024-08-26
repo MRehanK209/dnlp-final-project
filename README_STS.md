@@ -9,11 +9,14 @@ et al., 2013]. Unlike paraphrasing, which is a binary decision of whether two te
 | Model name                      | Parameters                                | Pearson Correlation |
 | ------------------------------- | ----------------------------------------- | -------- |
 | Baseline                        |                                           | 0.375    |
+| Scalling Similarity scores between 0 and 1  |    | 0.375   |
+| Adding additional dense layers on top of the BERT embeddings                         |                    | 0.370  |
 | Regularization                  | `--lr 1e-05 --hidden_dropout_prob 0.3`    | 0.370    |
-| Increased Learning rate | `--lr 8e-05 --hidden_dropout_prob 0.1`           |  0.363    |
-| Scalling Similarity scores between 0 and 1  | `--lr 1e-05 --hidden_dropout_prob 0.3`    | 0.375   |
 | SophiaH                         |                                           | 0.365  |
-| Adding additional dense layers on top of the BERT embeddings                         |                                           | 0.370  |
+| Increased Learning rate | `--lr 8e-05 --hidden_dropout_prob 0.1`           |  0.363    |
+
+
+
 
 TEXT
 

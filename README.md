@@ -154,11 +154,6 @@ Train Acc: Training Accuracy
 | 9  | 20 | 1e-5 | None  | none | none   | none | None | None  | AdamW| 0.01 | None  | 64| 0.1| 4h 30m| 79.0%     | 99.6%    |
 
 
-\[
-\text{Loss} = -\alpha (1 - p_t)^\gamma \cdot \left[ y \log(\hat{y}) + (1-y) \log(1-\hat{y}) \right] + \epsilon \cdot \left( \frac{1}{2} \right) + \lambda \cdot \sum_{j=1}^{n} \left( f(x_j + \delta) - f(x_j) \right)^2
-\]
- 
-
 ### Detailed Results Analysis
 
 1. **Baseline Experiment**:
@@ -274,13 +269,7 @@ This project focuses on improving a BERT-based model for multitask (sst, sts, an
 
 ### Setup Instructions
 
-To set up the environment and run the model, follow these steps:
-
-1. Run `./setwp_gwdf.sh` to install all the required dependencies and set up the environment.
-2. Use `sbatch run_train_bert.sh` with 'sst' or 'multitask' argument on a GPU-enabled cluster to initiate model training using Slurm.
-
-The setup script installs necessary libraries such as TensorFlow, PyTorch, and HuggingFace Transformers. A GPU-enabled environment with CUDA support is recommended for faster training.
-
+It is the same procedure  and code as above task to set up the environment and run the model.
 ### Methodology
 
 This section describes the methodology used in our experiments to extend the training of the multitask BERT model for Sentiment.
@@ -350,12 +339,7 @@ The semantic textual similarity (STS) task seeks to capture the notion that some
 
 ### Setup Instructions
 
-To set up the environment and run the model, follow these steps:
-
-1. Run `./setwp_gwdf.sh` to install all the required dependencies and set up the environment.
-2. Use `sbatch run_train_bert.sh` with 'sts' or 'multitask' argument on a GPU-enabled cluster to initiate model training using Slurm.
-
-The setup script installs necessary libraries such as TensorFlow, PyTorch, and HuggingFace Transformers. A GPU-enabled environment with CUDA support is recommended for faster training.
+The code and process remain unchanged to set up the environment and run the model for the task as well.
 
 ### Methodology
 

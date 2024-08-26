@@ -28,7 +28,7 @@ Arsalane, Mohamed Reda <br/>
 
 [![Black Code Style](https://img.shields.io/badge/Code%20Style-Black-black.svg)](https://black.readthedocs.io/en/stable/)
 
-[![AI-Usage Card](https://img.shields.io/badge/AI_Usage_Card-pdf-blue.svg)](./AI-Usage-Card.pdf/)
+[![AI-Usage Card](https://img.shields.io/badge/AI_Usage_Card-pdf-blue.svg)]([./AI-Usage-Card.pdf/](https://github.com/MRehanK209/dnlp-final-project/blob/main/ai-usage-card.pdf))
 
   
 
@@ -677,7 +677,7 @@ The experiments demonstrate that SMART regularization combined with no additiona
   
 ## AI-Usage Card
 
-Artificial Intelligence (AI) aided the development of this project. For transparency, we provide our [AI-Usage Card](./AI-Usage-Card.pdf/) at the top. The card is based on [https://ai-cards.org/](https://ai-cards.org/).
+Artificial Intelligence (AI) aided the development of this project. For transparency, we provide our [AI-Usage Card]([./AI-Usage-Card.pdf/](https://github.com/MRehanK209/dnlp-final-project/blob/main/ai-usage-card.pdf)). The card is based on [https://ai-cards.org/](https://ai-cards.org/). Maximum 3 authors can be added, So we added the name of 3 members (Injmam, Rehan and Saad)
 
 
 ## Acknowledgement

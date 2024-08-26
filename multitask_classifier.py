@@ -40,11 +40,48 @@ def seed_everything(seed=11711):
 BERT_HIDDEN_SIZE = 768
 N_SENTIMENT_CLASSES = 5
 
+def smoothness_inducing_loss(model, input_ids_1, attention_mask_1, input_ids_2, attention_mask_2, labels, criterion, epsilon=1e-8, lambda_reg=0.01):
+    # Get the input embeddings for both sentence pairs from the BERT model
+    embeddings_1 = model.forward(input_ids=input_ids_1, attention_mask=attention_mask_1)
+    embeddings_2 = model.forward(input_ids=input_ids_2, attention_mask=attention_mask_2)
+    # Add small Gaussian noise to the embeddings
+    noise_1 = torch.randn_like(embeddings_1) * epsilon
+    noise_2 = torch.randn_like(embeddings_2) * epsilon
+    perturbed_embeddings_1 = embeddings_1 + noise_1
+    perturbed_embeddings_2 = embeddings_2 + noise_2
+
+    # Original forward pass with unperturbed inputs
+    original_logits = model.predict_paraphrase(input_ids_1, attention_mask_1, input_ids_2, attention_mask_2)
+    original_logits_sig = original_logits.sigmoid().round().flatten()#.detach().cpu().numpy()
+
+
+    # Forward pass with perturbed embeddings
+    perturbed_output= torch.cat((perturbed_embeddings_1, perturbed_embeddings_2), dim=1)
+    
+
+    #perturbed_output= torch.cat((perturbed_embeddings_1, perturbed_embeddings_2), dim=1)
+    perturbed_logits = model.paraphrase_classifier(perturbed_output)
+    perturbed_logits=perturbed_logits.sigmoid().round().flatten()#.detach().cpu().numpy()
+
+    # Get the pooled output (usually the output corresponding to the [CLS] token)
+    # Reshape labels to match the shape of the outputs
+    labels = labels.float() # Add an extra dimension
+
+    # Calculate the original loss
+    original_loss = criterion(original_logits, labels.float())
+    #b_labels = b_labels.flatten().cpu().numpy()
+    # Calculate the smoothness regularization term (L2 norm)
+    smoothness_loss = torch.mean(torch.norm(original_logits_sig - perturbed_logits, p=2, dim=-1))
+
+
+    # Combine the original loss with the smoothness regularization term
+    total_loss = original_loss + lambda_reg * smoothness_loss
+
+    return total_loss
 
 class MultitaskBERT(nn.Module):
     """
     This module should use BERT for these tasks:
-
     - Sentiment classification (predict_sentiment)
     - Paraphrase detection (predict_paraphrase)
     - Semantic Textual Similarity (predict_similarity)
@@ -57,38 +94,50 @@ class MultitaskBERT(nn.Module):
         self.bert = BertModel.from_pretrained(
             "bert-base-uncased", local_files_only=config.local_files_only
         )
-        
+
         for param in self.bert.parameters():
             if config.option == "pretrain":
                 param.requires_grad = False
             elif config.option == "finetune":
                 param.requires_grad = True
 
-        #STS
+        # STS
         self.sts_classifier = nn.Linear(self.bert.config.hidden_size * 2, 1)
 
-        #SST 
-        self.sst_classifier = nn.Linear(self.bert.config.hidden_size, 5)
+        # SST with Custom Layers
+        self.sst_shortcut = nn.Linear(self.bert.config.hidden_size, 5)
+        self.sst_layers = nn.Sequential(
+            nn.Linear(self.bert.config.hidden_size, 512),
+            nn.LayerNorm(512),
+            nn.ReLU(),
+            nn.Dropout(config.hidden_dropout_prob),
+            nn.Linear(512, 512),
+            nn.LayerNorm(512),
+            nn.ReLU(),
+            nn.Dropout(config.hidden_dropout_prob),
+            nn.Linear(512, 5)
+        )
 
-        #QQP    
+        # QQP
         self.paraphrase_classifier = nn.Linear(self.bert.config.hidden_size * 2, 1)
+
+    def forward_sst(self, inputs):
+        residual_output = self.sst_shortcut(inputs)
+        output = self.sst_layers(inputs)
+        output = output + residual_output
+        return output
 
     def forward(self, input_ids, attention_mask):
         """Takes a batch of sentences and produces embeddings for them."""
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
-        pooled_output = outputs['pooler_output'] 
+        pooled_output = outputs['pooler_output']
         return pooled_output
 
     def predict_sentiment(self, input_ids, attention_mask):
-        """
-        Given a batch of sentences, outputs logits for classifying sentiment.
-        There are 5 sentiment classes:
-        (0 - negative, 1- somewhat negative, 2- neutral, 3- somewhat positive, 4- positive)
-        Thus, your output should contain 5 logits for each sentence.
-        Dataset: SST
-        """
         pooled_output = self.forward(input_ids, attention_mask)
-        logits = self.sst_classifier(pooled_output)
+        residual_output = self.sst_shortcut(pooled_output)
+        output = self.sst_layers(pooled_output)
+        logits = output + residual_output
         return logits
 
     def predict_paraphrase(self, input_ids_1, attention_mask_1, input_ids_2, attention_mask_2):
@@ -121,7 +170,7 @@ class MultitaskBERT(nn.Module):
         return normalized_sts_logits
 
     def predict_paraphrase_types(
-        self, input_ids_1, attention_mask_1, input_ids_2, attention_mask_2
+            self, input_ids_1, attention_mask_1, input_ids_2, attention_mask_2
     ):
         """
         Given a batch of pairs of sentences, outputs logits for detecting the paraphrase types.
@@ -130,7 +179,7 @@ class MultitaskBERT(nn.Module):
         during evaluation, and handled as a logit by the appropriate loss function.
         Dataset: ETPC
         """
-        #raise NotImplementedError
+        # raise NotImplementedError
 
 
 def save_model(model, optimizer, args, config, filepath):
@@ -170,7 +219,6 @@ def train_multitask(args):
 
     # SST dataset
     if args.task == "sst" or args.task == "multitask":
-        
         sst_train_data = SentenceClassificationDataset(sst_train_data, args)
         sst_dev_data = SentenceClassificationDataset(sst_dev_data, args)
 
@@ -188,7 +236,6 @@ def train_multitask(args):
         )
         # STS dataset
     if args.task == "sts" or args.task == "multitask":
-
         sts_train_data = SentencePairDataset(sts_train_data, args)
         sts_dev_data = SentencePairDataset(sts_dev_data, args)
 
@@ -206,7 +253,6 @@ def train_multitask(args):
         )
         # QQP dataset
     if args.task == "qqp" or args.task == "multitask":
-        
         quora_train_data = SentencePairDataset(quora_train_data, args)
         quora_dev_data = SentencePairDataset(quora_dev_data, args)
 
@@ -244,6 +290,17 @@ def train_multitask(args):
     model = MultitaskBERT(config)
     model = model.to(device)
 
+    def regularized_loss(logits, labels, model, lambda_reg=0.01):
+        # Compute the original loss
+        loss = F.cross_entropy(logits, labels.view(-1))
+
+        # Compute the L2 regularization loss
+        l2_reg = sum(param.norm(2) ** 2 for param in model.parameters())
+
+        # Combine the two losses
+        total_loss = loss + lambda_reg * l2_reg
+        return total_loss
+
     lr = args.lr
     optimizer = AdamW(model.parameters(), lr=lr)
     best_dev_acc = float("-inf")
@@ -258,7 +315,7 @@ def train_multitask(args):
             # Train the model on the sst dataset.
 
             for batch in tqdm(
-                sst_train_dataloader, desc=f"train-{epoch+1:02}", disable=TQDM_DISABLE
+                    sst_train_dataloader, desc=f"train-{epoch + 1:02}", disable=TQDM_DISABLE
             ):
                 b_ids, b_mask, b_labels = (
                     batch["token_ids"],
@@ -272,7 +329,8 @@ def train_multitask(args):
 
                 optimizer.zero_grad()
                 logits = model.predict_sentiment(b_ids, b_mask)
-                loss = F.cross_entropy(logits, b_labels.view(-1))
+                #loss = F.cross_entropy(logits, b_labels.view(-1))
+                loss = regularized_loss(logits, b_labels, model)
                 loss.backward()
                 optimizer.step()
 
@@ -282,7 +340,7 @@ def train_multitask(args):
         if args.task == "sts" or args.task == "multitask":
             # Train the model on the sts dataset.
             for batch in tqdm(
-                sts_train_dataloader, desc=f"train-{epoch+1:02}", disable=TQDM_DISABLE
+                    sts_train_dataloader, desc=f"train-{epoch + 1:02}", disable=TQDM_DISABLE
             ):
                 b_ids1, b_ids2, b_mask1, b_mask2, b_labels = (
                     batch["token_ids_1"],
@@ -303,14 +361,13 @@ def train_multitask(args):
 
                 if b_labels.dtype != torch.float32:
                     b_labels = b_labels.float()
-                
+
                 loss = F.mse_loss(normalized_logits, b_labels.view(-1))
                 loss.backward()
                 optimizer.step()
 
                 train_loss += loss.item()
                 num_batches += 1
-
 
         if args.task == "qqp" or args.task == "multitask":
             # Train the model on the qqp dataset.
@@ -333,8 +390,19 @@ def train_multitask(args):
 
                 optimizer.zero_grad()
                 logits = model.predict_paraphrase(b_ids_1, b_mask_1, b_ids_2, b_mask_2)
+                #pos_weight = torch.tensor([1.7]).to(device)
+                #criterion=F.binary_cross_entropy_with_logits
                 loss = F.binary_cross_entropy_with_logits(logits, b_labels.float())
+                """loss = smoothness_inducing_loss(model,input_ids_1=b_ids_1, attention_mask_1=b_mask_1, 
+                    input_ids_2=b_ids_2, attention_mask_2=b_mask_2,
+                    labels=b_labels,
+                    criterion=criterion,
+                    epsilon=1e-8,
+                    lambda_reg=1e-6
+                            )"""
+                loss.to(device)
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
                 optimizer.step()
 
                 train_loss += loss.item()
@@ -371,17 +439,24 @@ def train_multitask(args):
             "sts": (sts_train_corr, sts_dev_corr),
             "qqp": (quora_train_acc, quora_dev_acc),
             "etpc": (etpc_train_acc, etpc_dev_acc),
-            "multitask": (((sst_train_acc if sst_train_acc is not None else 0) + (quora_train_acc if quora_train_acc is not None else 0) + ((sts_train_corr + 1) / 2 if sts_train_corr is not None else 0)) / 3, ((sst_dev_acc if sst_dev_acc is not None else 0) + (quora_dev_acc if quora_dev_acc is not None else 0) + ((sts_dev_corr + 1) / 2 if sts_dev_corr is not None else 0)) / 3),
+            "multitask": (((sst_train_acc if sst_train_acc is not None else 0) + (
+                quora_train_acc if quora_train_acc is not None else 0) + (
+                               (sts_train_corr + 1) / 2 if sts_train_corr is not None else 0)) / 3, (
+                                      (sst_dev_acc if sst_dev_acc is not None else 0) + (
+                                  quora_dev_acc if quora_dev_acc is not None else 0) + (
+                                          (sts_dev_corr + 1) / 2 if sts_dev_corr is not None else 0)) / 3),
         }[args.task]
 
         print(
-            f"Epoch {epoch+1:02} ({args.task}): train loss :: {train_loss:.3f}, train :: {train_acc:.3f}, dev :: {dev_acc:.3f}"
+            f"Epoch {epoch + 1:02} ({args.task}): train loss :: {train_loss:.3f}, train :: {train_acc:.3f}, dev :: {dev_acc:.3f}"
         )
 
         if dev_acc > best_dev_acc:
             best_dev_acc = dev_acc
             save_model(model, optimizer, args, config, args.filepath)
-
+        # Print current learning rate for monitoring
+        #for param_group in optimizer.param_groups:
+            #print(f"Current learning rate: {param_group['lr']}")
 
 def test_model(args):
     with torch.no_grad():
@@ -439,7 +514,7 @@ def get_args():
     # TODO: ETPC was not used
     # You should split the train data into a train and dev set first and change the
     # default path of the --etpc_dev argument to your dev set.
-    
+
     parser.add_argument("--etpc_train", type=str, default="data/etpc-paraphrase-train.csv")
     parser.add_argument("--etpc_dev", type=str, default="data/etpc-paraphrase-train.csv")
     parser.add_argument(

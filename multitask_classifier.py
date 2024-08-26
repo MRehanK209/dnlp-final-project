@@ -6,6 +6,7 @@ import re
 import sys
 import time
 from types import SimpleNamespace
+
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -25,11 +26,6 @@ from optimizer import AdamW
 TQDM_DISABLE = True
 
 
-import nltk
-from nltk.corpus import wordnet
-nltk.download('wordnet')
-nltk.download('omw-1.4')
-
 # fix the random seed
 def seed_everything(seed=11711):
     random.seed(seed)
@@ -48,7 +44,6 @@ N_SENTIMENT_CLASSES = 5
 class MultitaskBERT(nn.Module):
     """
     This module should use BERT for these tasks:
-
     - Sentiment classification (predict_sentiment)
     - Paraphrase detection (predict_paraphrase)
     - Semantic Textual Similarity (predict_similarity)
@@ -68,32 +63,43 @@ class MultitaskBERT(nn.Module):
             elif config.option == "finetune":
                 param.requires_grad = True
 
-        # Additional layers for STS task
+        # STS
         self.sts_classifier = nn.Linear(self.bert.config.hidden_size * 2, 1)
 
-        # SST
-        self.sst_classifier = nn.Linear(self.bert.config.hidden_size, 5)
+        # SST with CustomProcessingBlock
+        self.sst_shortcut = nn.Linear(self.bert.config.hidden_size, 5)
+        self.sst_layers = nn.Sequential(
+            nn.Linear(self.bert.config.hidden_size, 512),
+            nn.LayerNorm(512),
+            nn.ReLU(),
+            nn.Dropout(config.hidden_dropout_prob),
+            nn.Linear(512, 512),
+            nn.LayerNorm(512),
+            nn.ReLU(),
+            nn.Dropout(config.hidden_dropout_prob),
+            nn.Linear(512, 5)
+        )
 
+        # QQP
         self.paraphrase_classifier = nn.Linear(self.bert.config.hidden_size * 2, 1)
+
+    def forward_sst(self, inputs):
+        residual_output = self.sst_shortcut(inputs)
+        output = self.sst_layers(inputs)
+        output = output + residual_output
+        return output
 
     def forward(self, input_ids, attention_mask):
         """Takes a batch of sentences and produces embeddings for them."""
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
-        # print("Keys in outputs:", outputs.keys())
-        pooled_output = outputs['pooler_output']  # Correctly access pooler_output from outputs
+        pooled_output = outputs['pooler_output']
         return pooled_output
 
     def predict_sentiment(self, input_ids, attention_mask):
-        """
-        Given a batch of sentences, outputs logits for classifying sentiment.
-        There are 5 sentiment classes:
-        (0 - negative, 1- somewhat negative, 2- neutral, 3- somewhat positive, 4- positive)
-        Thus, your output should contain 5 logits for each sentence.
-        Dataset: SST
-        """
-        # raise NotImplementedError
         pooled_output = self.forward(input_ids, attention_mask)
-        logits = self.sst_classifier(pooled_output)
+        residual_output = self.sst_shortcut(pooled_output)
+        output = self.sst_layers(pooled_output)
+        logits = output + residual_output
         return logits
 
     def predict_paraphrase(self, input_ids_1, attention_mask_1, input_ids_2, attention_mask_2):
@@ -108,7 +114,6 @@ class MultitaskBERT(nn.Module):
         concatenated = torch.cat((embeddings_1, embeddings_2), dim=1)
         logits = self.paraphrase_classifier(concatenated)
         return logits.squeeze()
-        #raise NotImplementedError
 
     def predict_similarity(self, input_ids_1, attention_mask_1, input_ids_2, attention_mask_2):
         """
@@ -117,19 +122,13 @@ class MultitaskBERT(nn.Module):
         it will be handled as a logit by the appropriate loss function.
         Dataset: STS
         """
-        # Get BERT embeddings for both sentences
         embeddings_1 = self.forward(input_ids_1, attention_mask_1)
         embeddings_2 = self.forward(input_ids_2, attention_mask_2)
-
-        # Concatenate the embeddings
         combined_embeddings = torch.cat((embeddings_1, embeddings_2), dim=1)
-
         # Pass through a linear layer to get the similarity logits
-        sts_logits = self.sts_classifier(combined_embeddings).squeeze(-1)  # Shape: [batch_size]
-
+        sts_logits = self.sts_classifier(combined_embeddings).squeeze(-1)
         # Normalize logits to [0, 5]
         normalized_sts_logits = torch.sigmoid(sts_logits) * 5
-
         return normalized_sts_logits
 
     def predict_paraphrase_types(
@@ -160,73 +159,13 @@ def save_model(model, optimizer, args, config, filepath):
     print(f"Saving the model to {filepath}.")
 
 
-def synonym_replacement(sentence, n=3):
-    """
-    Replace up to `n` words in the sentence with their synonyms.
-    """
-    words = sentence.split()
-    new_words = words.copy()
-
-    for _ in range(n):
-        word = random.choice(words)
-        synonyms = wordnet.synsets(word)
-        if synonyms:
-            synonym = random.choice(synonyms).lemmas()[0].name()
-            if synonym != word:
-                # Replace word in sentence with its synonym
-                new_words = [synonym if w == word else w for w in new_words]
-
-    return ' '.join(new_words)
-
-
-def augment_sst_data(sst_data, percentage=0.3):
-    """
-    Augments the SST data by applying synonym replacement to a percentage of the sentences.
-    """
-    num_sentences = len(sst_data)
-    num_to_augment = int(percentage * num_sentences)
-    indices_to_augment = random.sample(range(num_sentences), num_to_augment)
-
-    # Create a new list to hold the augmented data
-    augmented_data = []
-
-    for idx in indices_to_augment:
-        # Ensure we are working with a dictionary and access 'sentence' correctly
-        if isinstance(sst_data[idx], dict):
-            sentence = sst_data[idx]['sentence']
-            # Apply synonym replacement to the sentence
-            augmented_sentence = synonym_replacement(sentence)
-            # Update the sentence in the dictionary
-            augmented_data.append({
-                'id': sst_data[idx]['id'],
-                'sentence': augmented_sentence,
-                'sentiment': sst_data[idx]['sentiment']
-            })
-
-    # Add the augmented data to the original data
-    sst_data.extend(augmented_data)
-
-    return sst_data
-
-# TODO Currently only trains on SST dataset!
 def train_multitask(args):
-    #device = torch.device("cuda") if args.use_gpu else torch.device("cpu")
-    # Load data
-    # Create the data and its corresponding datasets and dataloader:
-
-    #sst_train_data, _, quora_train_data, sts_train_data, etpc_train_data = load_multitask_data(
-    #    args.sst_train, args.quora_train, args.sts_train, args.etpc_train, split="train"
-    #)
-
     device = torch.device("cuda") if args.use_gpu else torch.device("cpu")
     # Load data
+    # Create the data and its corresponding datasets and dataloader:
     sst_train_data, _, quora_train_data, sts_train_data, etpc_train_data = load_multitask_data(
         args.sst_train, args.quora_train, args.sts_train, args.etpc_train, split="train"
     )
-    # Apply synonym replacement to 30% of SST data
-    if args.task == "sst" or args.task == "multitask":
-        sst_train_data = augment_sst_data(sst_train_data, percentage=0.3)
-
     sst_dev_data, _, quora_dev_data, sts_dev_data, etpc_dev_data = load_multitask_data(
         args.sst_dev, args.quora_dev, args.sts_dev, args.etpc_dev, split="train"
     )
@@ -242,9 +181,6 @@ def train_multitask(args):
 
     # SST dataset
     if args.task == "sst" or args.task == "multitask":
-        #sst_train_data = sst_train_data[:100]
-        #sst_dev_data = sst_dev_data[:100]
-
         sst_train_data = SentenceClassificationDataset(sst_train_data, args)
         sst_dev_data = SentenceClassificationDataset(sst_dev_data, args)
 
@@ -260,10 +196,8 @@ def train_multitask(args):
             batch_size=args.batch_size,
             collate_fn=sst_dev_data.collate_fn,
         )
+        # STS dataset
     if args.task == "sts" or args.task == "multitask":
-        #sts_train_data = sts_train_data[:500]
-        #sts_dev_data = sts_dev_data[:500]
-
         sts_train_data = SentencePairDataset(sts_train_data, args)
         sts_dev_data = SentencePairDataset(sts_dev_data, args)
 
@@ -279,30 +213,23 @@ def train_multitask(args):
             batch_size=args.batch_size,
             collate_fn=sts_dev_data.collate_fn,
         )
-
+        # QQP dataset
     if args.task == "qqp" or args.task == "multitask":
-        #sts_train_data = quora_train_data[:100]
-        #sts_dev_data = quora_dev_data[:100]
-        paraphrase_train_data = SentencePairDataset(quora_train_data, args)
-        paraphrase_dev_data = SentencePairDataset(quora_dev_data, args)
+        quora_train_data = SentencePairDataset(quora_train_data, args)
+        quora_dev_data = SentencePairDataset(quora_dev_data, args)
 
         quora_train_dataloader = DataLoader(
-            paraphrase_train_data,
+            quora_train_data,
             shuffle=True,
             batch_size=args.batch_size,
-            collate_fn=paraphrase_train_data.collate_fn,
+            collate_fn=quora_train_data.collate_fn,
         )
         quora_dev_dataloader = DataLoader(
-            paraphrase_dev_data,
+            quora_dev_data,
             shuffle=False,
             batch_size=args.batch_size,
-            collate_fn=paraphrase_dev_data.collate_fn,
+            collate_fn=quora_dev_data.collate_fn,
         )
-
-    ### TODO
-    #   Load data for the other datasets
-    # If you are doing the paraphrase type detection with the minBERT model as well, make sure
-    # to transform the the data labels into binaries (as required in the bart_detection.py script)
 
     # Init model
     config = {
@@ -323,7 +250,18 @@ def train_multitask(args):
     print(separator)
 
     model = MultitaskBERT(config)
-    model = model.to(device)    
+    model = model.to(device)
+
+    def regularized_loss(logits, labels, model, lambda_reg=0.01):
+        # Compute the original loss
+        loss = F.cross_entropy(logits, labels.view(-1))
+
+        # Compute the L2 regularization loss
+        l2_reg = sum(param.norm(2) ** 2 for param in model.parameters())
+
+        # Combine the two losses
+        total_loss = loss + lambda_reg * l2_reg
+        return total_loss
 
     lr = args.lr
     optimizer = AdamW(model.parameters(), lr=lr)
@@ -354,6 +292,7 @@ def train_multitask(args):
                 optimizer.zero_grad()
                 logits = model.predict_sentiment(b_ids, b_mask)
                 loss = F.cross_entropy(logits, b_labels.view(-1))
+                loss = regularized_loss(logits, b_labels, model)
                 loss.backward()
                 optimizer.step()
 
@@ -382,10 +321,6 @@ def train_multitask(args):
                 optimizer.zero_grad()
                 normalized_logits = model.predict_similarity(b_ids1, b_mask1, b_ids2, b_mask2)
 
-                # Normalize logits to [0, 5]
-                # normalized_logits = torch.sigmoid(logits) * 5.0
-
-                # Convert b_labels to FloatTensor if necessary
                 if b_labels.dtype != torch.float32:
                     b_labels = b_labels.float()
 
@@ -397,7 +332,7 @@ def train_multitask(args):
                 num_batches += 1
 
         if args.task == "qqp" or args.task == "multitask":
-            # Trains the model on the qqp dataset
+            # Train the model on the qqp dataset.
             for batch in tqdm(
                     quora_train_dataloader, desc=f"train-{epoch + 1:02}", disable=TQDM_DISABLE
             ):
@@ -423,13 +358,6 @@ def train_multitask(args):
 
                 train_loss += loss.item()
                 num_batches += 1
-            ### TODO
-            #raise NotImplementedError
-
-        if args.task == "etpc" or args.task == "multitask":
-            # Trains the model on the etpc dataset
-            ### TODO
-            raise NotImplementedError
 
         train_loss = train_loss / num_batches
 
@@ -462,7 +390,12 @@ def train_multitask(args):
             "sts": (sts_train_corr, sts_dev_corr),
             "qqp": (quora_train_acc, quora_dev_acc),
             "etpc": (etpc_train_acc, etpc_dev_acc),
-            "multitask": (0, 0),  # TODO
+            "multitask": (((sst_train_acc if sst_train_acc is not None else 0) + (
+                quora_train_acc if quora_train_acc is not None else 0) + (
+                               (sts_train_corr + 1) / 2 if sts_train_corr is not None else 0)) / 3, (
+                                      (sst_dev_acc if sst_dev_acc is not None else 0) + (
+                                  quora_dev_acc if quora_dev_acc is not None else 0) + (
+                                          (sts_dev_corr + 1) / 2 if sts_dev_corr is not None else 0)) / 3),
         }[args.task]
 
         print(
@@ -527,11 +460,12 @@ def get_args():
     parser.add_argument("--sts_dev", type=str, default="data/sts-similarity-dev.csv")
     parser.add_argument("--sts_test", type=str, default="data/sts-similarity-test-student.csv")
 
-    # TODO
+    # TODO: ETPC was not used
     # You should split the train data into a train and dev set first and change the
     # default path of the --etpc_dev argument to your dev set.
+
     parser.add_argument("--etpc_train", type=str, default="data/etpc-paraphrase-train.csv")
-    parser.add_argument("--etpc_dev", type=str, default="data/etpc-paraphrase-dev.csv")
+    parser.add_argument("--etpc_dev", type=str, default="data/etpc-paraphrase-train.csv")
     parser.add_argument(
         "--etpc_test", type=str, default="data/etpc-paraphrase-detection-test-student.csv"
     )
@@ -614,7 +548,7 @@ def get_args():
     )
 
     # Hyperparameters
-    parser.add_argument("--batch_size", help="sst: 64 can fit a 12GB GPU", type=int, default=32)
+    parser.add_argument("--batch_size", help="sst: 64 can fit a 12GB GPU", type=int, default=64)
     parser.add_argument("--hidden_dropout_prob", type=float, default=0.3)
     parser.add_argument(
         "--lr",

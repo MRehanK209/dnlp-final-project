@@ -240,7 +240,6 @@ class SentencePairTestDataset(Dataset):
 
         return batched_data
 
-
 def load_multitask_data(sst_filename, quora_filename, sts_filename, etpc_filename, split="train"):
     sst_data = []
     num_labels = {}
@@ -259,7 +258,6 @@ def load_multitask_data(sst_filename, quora_filename, sts_filename, etpc_filenam
                 if label not in num_labels:
                     num_labels[label] = len(num_labels)
                 sst_data.append((sent, label, sent_id))
-
     print(f"Loaded {len(sst_data)} {split} examples from {sst_filename}")
 
     quora_data = []

@@ -107,7 +107,7 @@ The following enhancements were implemented:
 | `--label_smoothing_factor`    | Label smoothing factor. A regularization technique that prevents the model from becoming too confident by distributing some of the probability from the true class to the other classes, reducing overfitting. |
 | `--lambda` (Regression Factor) | Regularization parameter for controlling the strength of regularization, such as L1 or L2, to prevent overfitting by penalizing large weights. |
 | `--noise (Epsilon)`           | A small amount of noise is added to the input data or parameters during training to improve generalization and robustness against small perturbations. |
-| `--optimizer`                 | The optimization algorithm used to update the model's weights during training, such as AdamW, SGD, or RMSprop. Different optimizers can significantly affect the speed and quality of convergence. |
+| `--optimizer`                 | The optimization algorithm used to update the model's weights during training, such as AdamW, SophiaG. Different optimizers can significantly affect the speed and quality of convergence. |
 | `--weight_decay`              | Weight decay (also known as L2 regularization) adds a penalty to the loss function based on the size of the weights, helping to prevent overfitting by discouraging overly complex models. |
 | `--regularization`            | General term for techniques like L1, L2, or dropout that help prevent overfitting by penalizing large weights or randomly dropping units during training. |
 | `--batch_size`                | The number of training examples used in one iteration of model training. Larger batch sizes can lead to faster training but may require more memory, while smaller batches provide more frequent updates. |

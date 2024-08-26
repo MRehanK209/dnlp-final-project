@@ -70,7 +70,7 @@ This project focuses on building a robust model for paraphrase detection using t
 
 To set up the environment and run the model, follow these steps:
 
-1. Run `./setwp_gwdf.sh` to install all the required dependencies and set up the environment.
+1. Run `./setwp_gwdg.sh` to install all the required dependencies and set up the environment.
 2. Use `sbatch run_train_bert.sh` with 'qqp' or 'multitask' argument on a GPU-enabled cluster to initiate model training using Slurm.
 
 The setup script installs necessary libraries such as TensorFlow, PyTorch, and HuggingFace Transformers. A GPU-enabled environment with CUDA support is recommended for faster training.
@@ -276,7 +276,7 @@ This project focuses on improving a BERT-based model for multitask (sst, sts, an
 
 To set up the environment and run the model, follow these steps:
 
-1. Run `./setwp_gwdf.sh` to install all the required dependencies and set up the environment.
+1. Run `./setwp_gwdg.sh` to install all the required dependencies and set up the environment.
 2. Use `sbatch run_train_bert.sh` with 'sst' or 'multitask' argument on a GPU-enabled cluster to initiate model training using Slurm.
 
 The setup script installs necessary libraries such as TensorFlow, PyTorch, and HuggingFace Transformers. A GPU-enabled environment with CUDA support is recommended for faster training.
@@ -352,7 +352,7 @@ The semantic textual similarity (STS) task seeks to capture the notion that some
 
 To set up the environment and run the model, follow these steps:
 
-1. Run `./setwp_gwdf.sh` to install all the required dependencies and set up the environment.
+1. Run `./setwp_gwdg.sh` to install all the required dependencies and set up the environment.
 2. Use `sbatch run_train_bert.sh` with 'sts' or 'multitask' argument on a GPU-enabled cluster to initiate model training using Slurm.
 
 The setup script installs necessary libraries such as TensorFlow, PyTorch, and HuggingFace Transformers. A GPU-enabled environment with CUDA support is recommended for faster training.
